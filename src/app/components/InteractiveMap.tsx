@@ -12,6 +12,7 @@ import { GymView } from './GymView';
 import type { GymTier } from './GymView';
 import { ParkView } from './ParkView';
 import { GroceryStoreView } from './GroceryStoreView';
+import type { HomeFurnitureState } from '../lib/furniture';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
   DropdownMenu,
@@ -79,6 +80,10 @@ export interface InteractiveMapProps {
   onParkWalk: () => void;
   onSleep: (hours: number) => void;
   onEatMeal: (type: 'regular' | 'lux') => void;
+  onChill: (hours: number) => void;
+  onBuyFurniture: (itemId: string) => void;
+  homeFurniture: HomeFurnitureState;
+  isLiveWithParents: boolean;
   groceries: { regular: number; lux: number };
   currentWeather: { type: string; tempF: number; quality: string } | null;
   getTravelMinutes: (targetPhase: MapPhase, destDistrict?: DistrictName) => number;
@@ -250,6 +255,10 @@ export function InteractiveMap({
   onParkWalk,
   onSleep,
   onEatMeal,
+  onChill,
+  onBuyFurniture,
+  homeFurniture,
+  isLiveWithParents,
   groceries,
   currentWeather,
   getTravelMinutes,
@@ -473,11 +482,16 @@ export function InteractiveMap({
         onOpenMapOverlay={onOpenMapOverlay}
         apartmentName={selectedApartment?.name ?? 'Your Home'}
         apartmentRent={selectedApartment?.rent ?? 0}
+        isLiveWithParents={isLiveWithParents}
         currentEnergy={stats.energy}
         currentHunger={stats.hunger}
+        currentMoney={stats.money}
         groceries={groceries}
+        homeFurniture={homeFurniture}
         onSleep={onSleep}
         onEatMeal={onEatMeal}
+        onChill={onChill}
+        onBuyFurniture={onBuyFurniture}
       />
     );
   }

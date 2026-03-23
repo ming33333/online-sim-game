@@ -73,7 +73,7 @@ export function SchoolView({
   const hasActiveDegree =
     educationLevel === 'in-progress' && educationDegree !== null;
 
-  const [hours, setHours] = useState(2);
+  const [hours, setHours] = useState(4);
 
   const [degreeToEnroll, setDegreeToEnroll] = useState<Degree | null>(null);
 

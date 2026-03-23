@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { motion } from 'motion/react';
-import { Heart, Smile, Coins, Calendar, Sparkles, ScrollText, Clock, Wrench, Zap, Cloud, Briefcase, Home, GraduationCap, UtensilsCrossed } from 'lucide-react';
+import { Heart, Smile, Coins, Calendar, Sparkles, ScrollText, Clock, Wrench, Zap, Cloud, Briefcase, Home, GraduationCap, UtensilsCrossed, ListChecks, Gift } from 'lucide-react';
 import { getWeatherForDay, getWeekForecast, isGoodWeatherForWalk, getWeatherIcon } from '../lib/weather';
 import { InteractiveMap } from './InteractiveMap';
-import { HomeView } from './HomeView';
+import {
+  EMPTY_HOME_FURNITURE,
+  type HomeFurnitureState,
+  FURNITURE_BY_ID,
+  hasFridge,
+  getFridgeDailyEffects,
+  getSleepEnergyBonusPerHour,
+  getEatHungerBonus,
+  getChillHappinessPerHour,
+} from '../lib/furniture';
+import { CharacterPortrait, CHARACTER_PORTRAIT_URLS, type PortraitPresetId } from './CharacterPortrait';
 import { GymView } from './GymView';
 import type { GymTier } from './GymView';
 import { ParkView } from './ParkView';
@@ -20,6 +30,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
+import {
+  getDailyState,
+  simulateNextDay,
+  completeDailyActivity,
+  type DailyState,
+  type DailyActivity,
+} from '../lib/daily-activities';
+import { HOURS_EARLY_WORK_START } from '../../game/constants';
 
 export type LifeStage =
   | 'baby'
@@ -599,7 +617,11 @@ export function LifeSimGame() {
   const [gymMembership, setGymMembership] = useState<GymTier | null>(null);
   const [gymMembershipStartDay, setGymMembershipStartDay] = useState<number | null>(null);
   const [groceries, setGroceries] = useState<{ regular: number; lux: number }>({ regular: 0, lux: 0 }); // meal counts
+  const [homeFurniture, setHomeFurniture] = useState<HomeFurnitureState>(EMPTY_HOME_FURNITURE);
+  const [funItems, setFunItems] = useState<string[]>([]); // item ids from daily rewards
   const [diplomas, setDiplomas] = useState<Degree[]>([]);
+  const [dailyState, setDailyState] = useState<DailyState>(() => getDailyState());
+  const [dailyActivitiesOpen, setDailyActivitiesOpen] = useState(false);
   const [devCheatsOpen, setDevCheatsOpen] = useState(false);
   const [calendarOverlayOpen, setCalendarOverlayOpen] = useState(false);
   const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
@@ -688,6 +710,8 @@ export function LifeSimGame() {
     setGymMembership(null);
     setGymMembershipStartDay(null);
     setGroceries({ regular: 0, lux: 0 });
+    setHomeFurniture(EMPTY_HOME_FURNITURE);
+    setFunItems([]);
     setLastRentPaidSeasonEndDay(null);
     setJobSchedule('full-time');
     setJobTierIndex(0);
@@ -699,6 +723,67 @@ export function LifeSimGame() {
     setRentOverdue(false);
     setRentOverdueSinceDay(0);
     setGamePhase('selecting-home');
+  };
+
+  useEffect(() => {
+    if (stage === 'playing') {
+      const next = getDailyState();
+      setDailyState(next);
+      const hasIncomplete = next.activities.some((a) => !next.completedIds.has(a.id));
+      if (hasIncomplete) setDailyActivitiesOpen(true);
+    }
+  }, [stage]);
+
+  const claimDailyActivity = (activity: DailyActivity) => {
+    const next = completeDailyActivity(dailyState, activity.id);
+    if (!next) return;
+
+    setDailyState(next);
+
+    if (activity.rewardType === 'money') {
+      const amount = activity.rewardValue as number;
+      setStats((prev) => ({ ...prev, money: prev.money + amount }));
+    } else if (activity.rewardType === 'food') {
+      const v = activity.rewardValue as number;
+      const meals = Math.abs(v);
+      const isLux = v < 0;
+      setGroceries((prev) =>
+        isLux ? { ...prev, lux: prev.lux + meals } : { ...prev, regular: prev.regular + meals }
+      );
+    } else {
+      setFunItems((prev) => [...prev, activity.rewardValue as string]);
+    }
+
+    const rewardText =
+      activity.rewardType === 'money'
+        ? `+$${activity.rewardValue}`
+        : activity.rewardType === 'food'
+          ? `+${activity.rewardLabel}`
+          : `+${activity.rewardLabel} (inventory)`;
+    const entry: LogEntry = {
+      id: Date.now(),
+      text: `Completed daily: ${activity.name}. Reward: ${rewardText}`,
+      timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+      effects: activity.rewardType === 'money' ? { money: activity.rewardValue as number } : {},
+    };
+    setEventLog((prev) => [entry, ...prev]);
+  };
+
+  const handleSimulateNextDay = () => {
+    setDailyState(simulateNextDay());
+  };
+
+  const FUN_ITEM_NAMES: Record<string, string> = {
+    rubiks: "Rubik's Cube",
+    sketchbook: 'Sketchbook',
+    novel: 'Mystery Novel',
+    'board-game': 'Board Game',
+    plant: 'Succulent',
+    'coffee-mug': 'Fancy Coffee Mug',
+    poster: 'Cool Poster',
+    candle: 'Scented Candle',
+    'yoga-mat': 'Yoga Mat',
+    headphones: 'Nice Headphones',
   };
 
   const liveWithParentsApartment = APARTMENTS.find((a) => a.id === LIVE_WITH_PARENTS_ID)!;
@@ -732,7 +817,9 @@ export function LifeSimGame() {
     setSelectedApartment(apartment);
     if (rentToCharge > 0) {
       const firstSeasonEnd = [28, 56, 84, 112].find((d) => d >= stats.dayOfYear) ?? 28;
-      setLastRentPaidSeasonEndDay(firstSeasonEnd);
+      setLastRentPaidSeasonEndDay(
+        stats.dayOfYear <= 28 ? Math.max(0, firstSeasonEnd - DAYS_PER_SEASON) : firstSeasonEnd
+      );
     } else {
       setLastRentPaidSeasonEndDay(null);
     }
@@ -885,7 +972,7 @@ export function LifeSimGame() {
     if (job.workStartHour === 0 && job.workEndHourFull === 24) return true; // freelancer
     if (!isWeekday()) return false; // Mon–Fri only
     const endHour = getWorkEndHour(job);
-    return hour >= job.workStartHour && hour < endHour;
+    return hour >= job.workStartHour && hour - HOURS_EARLY_WORK_START < endHour; //
   };
 
   const getHoursAvailableToWork = (job: Job, hour: number): number => {
@@ -1001,6 +1088,14 @@ export function LifeSimGame() {
     let newRentOverdue = rentOverdue;
     let newRentOverdueSinceDay = rentOverdueSinceDay;
     let newSelectedApartment = selectedApartment;
+    let newLastRentPaidSeasonEndDay = lastRentPaidSeasonEndDay;
+
+    let groceryR = groceries.regular;
+    let groceryL = groceries.lux;
+    let furnitureHappinessDelta = 0;
+    let furnitureHungerDelta = 0;
+    let spoilRegular = 0;
+    let spoilLux = 0;
 
     let healthDeltaFromDaily = 0;
     while (newHourOfDay >= 24) {
@@ -1023,17 +1118,28 @@ export function LifeSimGame() {
       healthDeltaFromDaily -= healthDecayPerDay;
 
       const seasonEndDays = [28, 56, 84, 112];
-      const justCrossedSeasonEnd = seasonEndDays.includes(newDayOfYear - 1) || (newDayOfYear === 1 && stats.dayOfYear === DAYS_PER_YEAR);
+      const justCrossedSeasonEnd = seasonEndDays.includes(newDayOfYear - 1) || newDayOfYear === 1;
       const seasonJustEnded = newDayOfYear === 1 ? 112 : newDayOfYear - 1;
+      const baseRent = overrideRentPerSeason ?? (newSelectedApartment ? newSelectedApartment.rent : 0);
       const rentPerSeason =
-        overrideRentPerSeason ??
-        (newSelectedApartment ? newSelectedApartment.rent : 0);
-      const alreadyPaidForThisSeason = lastRentPaidSeasonEndDay != null && lastRentPaidSeasonEndDay >= seasonJustEnded;
+        newSelectedApartment?.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
+          ? UNIVERSITY_HOUSING_STUDENT_RENT
+          : baseRent;
+      const alreadyPaidForThisSeason = newLastRentPaidSeasonEndDay != null && newLastRentPaidSeasonEndDay >= seasonJustEnded;
 
       if (justCrossedSeasonEnd && rentPerSeason > 0 && !newRentOverdue && !alreadyPaidForThisSeason) {
         if (stats.money + moneyDelta >= rentPerSeason) {
           moneyDelta -= rentPerSeason;
-          setLastRentPaidSeasonEndDay(seasonJustEnded);
+          newLastRentPaidSeasonEndDay = seasonJustEnded;
+          setEventLog((prev) => [
+            {
+              id: Date.now() + 400,
+              text: `Rent paid: $${rentPerSeason.toLocaleString()} for the season.`,
+              timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
+              effects: { money: -rentPerSeason },
+            },
+            ...prev,
+          ]);
         } else {
           newRentOverdue = true;
           newRentOverdueSinceDay = newDayOfYear;
@@ -1049,6 +1155,25 @@ export function LifeSimGame() {
           {
             id: Date.now() + 300,
             text: '📱 Tuition reminder: In 3 days you will owe tuition for the next season of your degree. Open your phone to pay now.',
+            timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
+            effects: {},
+          },
+          ...prev,
+        ]);
+      }
+
+      // Rent reminder: 3 days before season end when rent > 0 and not living with parents.
+      const rentPerSeasonForReminder = newSelectedApartment?.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
+        ? UNIVERSITY_HOUSING_STUDENT_RENT
+        : (newSelectedApartment?.rent ?? 0);
+      if (
+        rentPerSeasonForReminder > 0 &&
+        seasonEndDays.some((end) => newDayOfYear === end - 3)
+      ) {
+        setEventLog((prev) => [
+          {
+            id: Date.now() + 301,
+            text: `📱 Rent reminder: In 3 days you will owe $${rentPerSeasonForReminder.toLocaleString()} rent for the next season. Open your phone to pay now.`,
             timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
             effects: {},
           },
@@ -1085,19 +1210,52 @@ export function LifeSimGame() {
         setSelectedApartment(liveWithParentsApartment);
         const evictEntry: LogEntry = {
           id: Date.now() + 1000,
-          text: 'You failed to pay rent in time and were evicted. You moved back in with your parents.',
+          text: '📱 You failed to pay rent in time and were evicted. You moved back in with your parents.',
           timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
           effects: {},
         };
         setEventLog((prev) => [evictEntry, ...prev]);
       }
+
+      if (newSelectedApartment?.id && newSelectedApartment.id !== LIVE_WITH_PARENTS_ID) {
+        if (!hasFridge(homeFurniture) && (groceryR > 0 || groceryL > 0)) {
+          if (groceryR > 0 && (groceryL === 0 || Math.random() < 0.55)) {
+            groceryR -= 1;
+            spoilRegular += 1;
+          } else if (groceryL > 0) {
+            groceryL -= 1;
+            spoilLux += 1;
+          }
+        }
+        const fe = getFridgeDailyEffects(homeFurniture);
+        furnitureHappinessDelta += fe.happiness;
+        furnitureHungerDelta += fe.hunger;
+      }
+    }
+
+    setGroceries({ regular: groceryR, lux: groceryL });
+    if (spoilRegular > 0 || spoilLux > 0) {
+      const parts: string[] = [];
+      if (spoilRegular > 0) parts.push(`${spoilRegular} regular meal(s)`);
+      if (spoilLux > 0) parts.push(`${spoilLux} luxury meal(s)`);
+      setEventLog((prev) => [
+        {
+          id: Date.now() + 150,
+          text: `Food spoiled (no refrigerator): lost ${parts.join(' and ')}.`,
+          timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
+          effects: {},
+        },
+        ...prev,
+      ]);
     }
 
     setRentOverdue(newRentOverdue);
     setRentOverdueSinceDay(newRentOverdueSinceDay);
+    setLastRentPaidSeasonEndDay(newLastRentPaidSeasonEndDay);
     if (newSelectedApartment !== selectedApartment) setSelectedApartment(newSelectedApartment);
 
-    const baseHappiness = stats.happiness + (effect.happiness || 0) + happinessDeltaFromParents;
+    const baseHappiness =
+      stats.happiness + (effect.happiness || 0) + happinessDeltaFromParents + furnitureHappinessDelta;
     const baseHealth = stats.health + (effect.health || 0) + healthDeltaFromDaily;
     let newStats = {
       ...stats,
@@ -1107,7 +1265,9 @@ export function LifeSimGame() {
       health: round2(Math.max(0, Math.min(100, baseHealth))),
       happiness: round2(Math.max(0, Math.min(100, baseHappiness))),
       energy: round2(Math.max(0, Math.min(100, stats.energy + (effect.energy || 0)))),
-      hunger: round2(Math.max(0, Math.min(100, stats.hunger + (effect.hunger ?? 0)))),
+      hunger: round2(
+        Math.max(0, Math.min(100, stats.hunger + (effect.hunger ?? 0) + furnitureHungerDelta))
+      ),
       money: Math.max(0, stats.money + moneyDelta),
       smarts: round2(Math.max(0, Math.min(10, stats.smarts + (effect.smarts || 0)))),
     };
@@ -1234,6 +1394,48 @@ export function LifeSimGame() {
     };
     setEventLog((prev) => [tuitionEntry, ...prev]);
     return tuitionForSeason;
+  };
+
+  const payRentNow = (): boolean => {
+    if (!selectedApartment || selectedApartment.id === LIVE_WITH_PARENTS_ID) return false;
+    const SEASON_END_DAYS = [28, 56, 84, 112];
+    const rentForSeason =
+      selectedApartment.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
+        ? UNIVERSITY_HOUSING_STUDENT_RENT
+        : selectedApartment.rent;
+    const seasonIndex = SEASON_END_DAYS.findIndex((d) => d >= stats.dayOfYear);
+    const currentSeasonEnd = seasonIndex >= 0 ? SEASON_END_DAYS[seasonIndex] : 112;
+    const targetSeasonEnd = rentOverdue
+      ? (rentOverdueSinceDay === 1 ? 112 : rentOverdueSinceDay - 1)
+      : currentSeasonEnd;
+    if (lastRentPaidSeasonEndDay != null && lastRentPaidSeasonEndDay >= targetSeasonEnd && !rentOverdue) {
+      setEventLog((prev) => [{
+        id: Date.now(),
+        text: 'You already paid rent for this season.',
+        timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+        effects: {},
+      }, ...prev]);
+      return false;
+    }
+    if (stats.money < rentForSeason) {
+      setEventLog((prev) => [{
+        id: Date.now(),
+        text: `You can't afford rent ($${rentForSeason.toLocaleString()}). You have $${stats.money.toLocaleString()}.`,
+        timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+        effects: {},
+      }, ...prev]);
+      return false;
+    }
+    setStats((prev) => ({ ...prev, money: prev.money - rentForSeason }));
+    setLastRentPaidSeasonEndDay(targetSeasonEnd);
+    if (rentOverdue) { setRentOverdue(false); setRentOverdueSinceDay(0); }
+    setEventLog((prev) => [{
+      id: Date.now(),
+      text: `You paid $${rentForSeason.toLocaleString()} rent.`,
+      timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+      effects: { money: -rentForSeason },
+    }, ...prev]);
+    return true;
   };
 
   const startDegree = (degree: Degree) => {
@@ -1403,8 +1605,14 @@ export function LifeSimGame() {
   };
 
   const sleep = (hours: number) => {
-    const energyGain = Math.min(hours * 10, 100 - stats.energy);
-    advanceTime({ energy: energyGain }, `You slept for ${hours} hour${hours > 1 ? 's' : ''}. Energy +${energyGain}.`, hours);
+    const bedBonus = getSleepEnergyBonusPerHour(homeFurniture);
+    const perHour = 10 + bedBonus;
+    const energyGain = Math.min(hours * perHour, 100 - stats.energy);
+    advanceTime(
+      { energy: energyGain },
+      `You slept for ${hours} hour${hours > 1 ? 's' : ''}. Energy +${energyGain.toFixed(0)}${bedBonus > 0 ? ` (bed +${bedBonus}/hr)` : ''}.`,
+      hours
+    );
     setGamePhase('home');
   };
 
@@ -1419,11 +1627,47 @@ export function LifeSimGame() {
   };
 
   const eatMeal = (type: 'regular' | 'lux') => {
-    const hungerGain = type === 'regular' ? 30 : 50;
+    const stoveBonus = getEatHungerBonus(homeFurniture);
+    const base = type === 'regular' ? 30 : 50;
+    const hungerGain = base + stoveBonus;
     const key = type;
     if (groceries[key] <= 0) return;
     setGroceries((prev) => ({ ...prev, [key]: prev[key] - 1 }));
-    advanceTime({ hunger: hungerGain }, `You ate a ${type} meal (15 mins). Hunger +${hungerGain}.`, 0.25);
+    advanceTime(
+      { hunger: hungerGain },
+      `You ate a ${type} meal (15 mins). Hunger +${hungerGain}${stoveBonus > 0 ? ` (stove +${stoveBonus})` : ''}.`,
+      0.25
+    );
+  };
+
+  const chillAtHome = (hours: number) => {
+    const decorBonus = getChillHappinessPerHour(homeFurniture);
+    const happy = hours * (2 + decorBonus);
+    const energyCost = -0.35 * hours;
+    advanceTime(
+      { happiness: happy, energy: energyCost },
+      `You chilled at home for ${hours} hour${hours > 1 ? 's' : ''}. Happiness +${happy.toFixed(1)}${decorBonus > 0 ? ` (decor +${decorBonus.toFixed(2)}/hr)` : ''}.`,
+      hours
+    );
+  };
+
+  const buyFurniture = (itemId: string) => {
+    const item = FURNITURE_BY_ID[itemId];
+    if (!item || stats.money < item.cost) return;
+    setHomeFurniture((prev) => {
+      if (item.category === 'decoration') {
+        if (prev.decorationIds.includes(item.id)) return prev;
+        return { ...prev, decorationIds: [...prev.decorationIds, item.id] };
+      }
+      if (item.category === 'bed') return { ...prev, bedId: item.id };
+      if (item.category === 'fridge') return { ...prev, fridgeId: item.id };
+      return { ...prev, stoveId: item.id };
+    });
+    advanceTime(
+      { money: -item.cost },
+      `You bought ${item.icon} ${item.name} for $${item.cost.toLocaleString()}.`,
+      0.5
+    );
   };
 
 
@@ -1440,6 +1684,7 @@ export function LifeSimGame() {
     setRentOverdueSinceDay(0);
     setLastRentPaidSeasonEndDay(null);
     setGroceries({ regular: 0, lux: 0 });
+    setHomeFurniture(EMPTY_HOME_FURNITURE);
     setJobSchedule('full-time');
   };
 
@@ -1459,7 +1704,7 @@ export function LifeSimGame() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
         >
-          <Card className="max-w-lg">
+          <Card className="max-w-4xl w-full">
             <CardHeader className="text-center">
               <div className="flex justify-center mb-4">
                 <Sparkles className="size-16 text-purple-500" />
@@ -1469,53 +1714,87 @@ export function LifeSimGame() {
                 Explore the map, do activities, and live your life day by day!
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label htmlFor="name" className="text-sm font-medium mb-2 block">
-                  What's your name?
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={characterName}
-                  onChange={(e) => setCharacterName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            <CardContent className="grid md:grid-cols-2 gap-6 items-start">
+              <div className="space-y-4 min-w-0">
+                <div>
+                  <label htmlFor="name" className="text-sm font-medium mb-2 block">
+                    What's your name?
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    value={characterName}
+                    onChange={(e) => setCharacterName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Choose your starting life path</p>
+                  <p className="text-xs text-gray-500">Each path has a different look in the character view.</p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {CHARACTER_PRESETS.map((preset) => {
+                      const thumb =
+                        preset.id === 'privileged' || preset.id === 'middle' || preset.id === 'struggling'
+                          ? CHARACTER_PORTRAIT_URLS[preset.id as PortraitPresetId]
+                          : null;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => setSelectedCharacter(preset)}
+                          className={`flex gap-3 items-start text-left border rounded-lg p-3 text-sm bg-white/60 hover:bg-white transition shadow-sm ${
+                            selectedCharacter?.id === preset.id
+                              ? 'border-purple-500 ring-2 ring-purple-300'
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt=""
+                              width={80}
+                              height={80}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-cover object-top flex-shrink-0 ring-1 ring-black/10 shadow-sm"
+                              aria-hidden
+                            />
+                          ) : null}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold mb-1">{preset.name}</div>
+                            <div className="text-xs text-gray-600 mb-1">{preset.description}</div>
+                            <div className="text-xs space-y-0.5">
+                              <div>Money: ${preset.startingMoney.toLocaleString()}</div>
+                              <div>Beauty: {preset.beauty.toFixed(2)}/10</div>
+                              <div>Smarts: {preset.smarts}/10</div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <Button
+                  onClick={startGame}
+                  disabled={!characterName.trim() || !selectedCharacter}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  size="lg"
+                >
+                  Start Your Life Journey
+                </Button>
+              </div>
+              <div className="md:sticky md:top-4 rounded-xl border border-purple-100 bg-white/40 p-3">
+                <p className="text-center text-xs font-semibold text-purple-800 uppercase tracking-wide mb-2">
+                  Character view
+                </p>
+                <CharacterPortrait
+                  variant="intro"
+                  presetId={selectedCharacter?.id ?? null}
+                  name={characterName.trim() || 'Your sim'}
+                  subtitle={selectedCharacter?.name ?? undefined}
                 />
               </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Choose your starting character</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {CHARACTER_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => setSelectedCharacter(preset)}
-                      className={`text-left border rounded-lg p-3 text-sm bg-white/60 hover:bg-white transition shadow-sm ${
-                        selectedCharacter?.id === preset.id
-                          ? 'border-purple-500 ring-2 ring-purple-300'
-                          : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="font-semibold mb-1">{preset.name}</div>
-                      <div className="text-xs text-gray-600 mb-1">{preset.description}</div>
-                      <div className="text-xs space-y-0.5">
-                        <div>Money: ${preset.startingMoney.toLocaleString()}</div>
-                        <div>Beauty: {preset.beauty.toFixed(2)}/10</div>
-                        <div>Smarts: {preset.smarts}/10</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <Button
-                onClick={startGame}
-                disabled={!characterName.trim() || !selectedCharacter}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                size="lg"
-              >
-                Start Your Life Journey
-              </Button>
             </CardContent>
           </Card>
         </motion.div>
@@ -1646,6 +1925,12 @@ export function LifeSimGame() {
             <div>
               <span className="font-semibold">Groceries:</span> {groceries.regular} regular meals, {groceries.lux} luxury meals
             </div>
+            {funItems.length > 0 && (
+              <div>
+                <span className="font-semibold">Fun items:</span>{' '}
+                {funItems.map((id) => FUN_ITEM_NAMES[id] ?? id).join(', ')}
+              </div>
+            )}
             <div>
               <span className="font-semibold">Home:</span> {selectedApartment ? selectedApartment.name : 'No home'}
             </div>
@@ -1668,6 +1953,21 @@ export function LifeSimGame() {
             <DialogDescription>Messages and important notices.</DialogDescription>
           </DialogHeader>
           <div className="max-h-64 overflow-y-auto text-sm space-y-2">
+            {rentOverdue && selectedApartment && selectedApartment.rent > 0 && (
+              <div className="border-l-4 border-amber-500 pl-2 py-1 bg-amber-50 rounded-r">
+                <div className="text-[10px] text-gray-500 mb-0.5">Now</div>
+                <div>📱 Rent is overdue! Pay within {RENT_GRACE_DAYS} days to avoid eviction.</div>
+                <div className="mt-1">
+                  <Button
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => payRentNow()}
+                  >
+                    Pay rent
+                  </Button>
+                </div>
+              </div>
+            )}
             {eventLog
               .filter((e) => e.text.startsWith('📱'))
               .map((e) => (
@@ -1687,14 +1987,87 @@ export function LifeSimGame() {
                       </Button>
                     </div>
                   )}
+                  {e.text.includes('Rent reminder') && (
+                    <div className="mt-1">
+                      <Button
+                        size="sm"
+                        className="h-6 px-2 text-[10px]"
+                        onClick={() => {
+                          payRentNow();
+                        }}
+                      >
+                        Pay rent
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
-            {eventLog.filter((e) => e.text.startsWith('📱')).length === 0 && (
+            {eventLog.filter((e) => e.text.startsWith('📱')).length === 0 && !(rentOverdue && selectedApartment && selectedApartment.rent > 0) && (
               <p className="text-xs text-gray-500">No messages yet.</p>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPhoneOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={dailyActivitiesOpen} onOpenChange={setDailyActivitiesOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListChecks className="size-4" />
+              Daily Activities
+            </DialogTitle>
+            <DialogDescription>
+              Complete these activities for today ({dailyState.date}). Rewards reset each real-world day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {dailyState.activities.map((activity) => {
+              const completed = dailyState.completedIds.has(activity.id);
+              return (
+                <div
+                  key={activity.id}
+                  className={`rounded-lg border-2 p-3 ${
+                    completed
+                      ? 'border-green-200 bg-green-50/50'
+                      : 'border-gray-200 bg-white hover:border-purple-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm flex items-center gap-1.5">
+                        {activity.name}
+                        {completed && (
+                          <span className="text-green-600 text-xs">✓ Completed</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5">{activity.description}</p>
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <Gift className="size-3 text-amber-500" />
+                        <span className="text-xs font-medium text-amber-700">
+                          Reward: {activity.rewardLabel}
+                        </span>
+                      </div>
+                    </div>
+                    {!completed && (
+                      <Button
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => claimDailyActivity(activity)}
+                      >
+                        Claim
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDailyActivitiesOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1756,7 +2129,21 @@ export function LifeSimGame() {
                       </div>
                     );
                   })()}
-                  <div className="mt-1 flex gap-1">
+                  <div className="mt-1 flex gap-1 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => setDailyActivitiesOpen(true)}
+                    >
+                      <ListChecks className="size-3 mr-1" />
+                      Daily Activities
+                      {dailyState.activities.some((a) => !dailyState.completedIds.has(a.id)) && (
+                        <span className="ml-1 rounded-full bg-purple-500 text-white text-[8px] px-1">
+                          {dailyState.activities.filter((a) => !dailyState.completedIds.has(a.id)).length}
+                        </span>
+                      )}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -2065,6 +2452,10 @@ export function LifeSimGame() {
               onParkWalk={parkWalk}
               onSleep={sleep}
               onEatMeal={eatMeal}
+              onChill={chillAtHome}
+              onBuyFurniture={buyFurniture}
+              homeFurniture={homeFurniture}
+              isLiveWithParents={selectedApartment?.id === LIVE_WITH_PARENTS_ID}
               groceries={groceries}
               educationLevel={educationLevel}
               educationDegree={educationDegree}
@@ -2100,21 +2491,40 @@ export function LifeSimGame() {
             />
           </div>
 
-          {/* Event Log + Developer Cheats - right column */}
-          <div className="md:col-span-1 min-h-0 flex flex-col gap-2">
-            <Card className="flex flex-col min-h-0 flex-1">
-              <CardHeader className="flex-shrink-0 py-2">
+          {/* Character view + compact event log + Developer Cheats - right column */}
+          <div className="md:col-span-1 min-h-0 flex flex-col gap-2 flex-1">
+            <Card className="flex flex-col flex-[2] min-h-0 border-indigo-100/80 bg-gradient-to-b from-white to-indigo-50/30">
+              <CardHeader className="flex-shrink-0 py-2 pb-1">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <ScrollText className="size-4" />
-                  Event Log
+                  <Sparkles className="size-4 text-violet-500" />
+                  Your character
                 </CardTitle>
-                <CardDescription className="text-xs">Recent activities</CardDescription>
+                <CardDescription className="text-xs">
+                  {characterName ? characterName : 'Sim'} · {selectedCharacter?.name ?? '—'}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="flex-1 min-h-0 overflow-hidden flex flex-col pt-0">
-                <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1 text-xs">
+              <CardContent className="flex-1 min-h-0 flex items-stretch justify-center pt-0 pb-3 px-2">
+                <CharacterPortrait
+                  variant="panel"
+                  presetId={selectedCharacter?.id ?? null}
+                  className="w-full max-w-[200px]"
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="flex flex-col flex-none max-h-[200px] min-h-[100px] border-purple-100">
+              <CardHeader className="flex-shrink-0 py-1.5 px-3">
+                <CardTitle className="flex items-center gap-2 text-xs">
+                  <ScrollText className="size-3.5" />
+                  Event log
+                </CardTitle>
+                <CardDescription className="text-[10px] leading-tight">Last few activities (scroll)</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 overflow-hidden flex flex-col pt-0 px-3 pb-2">
+                <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1 text-[11px]">
                   {eventLog.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">
-                      No activities yet. Click on a location to get started!
+                    <p className="text-[11px] text-gray-500 italic leading-snug">
+                      No activities yet — open the map and visit a place.
                     </p>
                   ) : (
                     eventLog.map((entry) => (
@@ -2122,12 +2532,12 @@ export function LifeSimGame() {
                         key={entry.id}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="border-l-4 border-purple-400 pl-2 py-1 bg-purple-50 rounded-r"
+                        className="border-l-2 border-purple-400 pl-1.5 py-0.5 bg-purple-50/90 rounded-r"
                       >
-                        <div className="text-[10px] font-semibold text-purple-700 mb-0.5">
+                        <div className="text-[9px] font-semibold text-purple-700 mb-0.5">
                           {entry.timestamp}
                         </div>
-                        <p className="text-xs text-gray-700 mb-1">{entry.text}</p>
+                        <p className="text-[11px] text-gray-700 mb-0.5 leading-snug">{entry.text}</p>
                         <div className="flex gap-1 flex-wrap">
                           {entry.effects.health != null && entry.effects.health !== 0 && (
                             <span
@@ -2378,6 +2788,14 @@ export function LifeSimGame() {
                       </Button>
                       <Button size="sm" className="h-6 text-[10px] bg-amber-600 hover:bg-amber-700" onClick={applyDevCheats}>
                         Apply
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] border-purple-300 text-purple-700 hover:bg-purple-50"
+                        onClick={handleSimulateNextDay}
+                      >
+                        Simulate next day
                       </Button>
                       <select
                         className="h-6 text-[10px] px-2 rounded border border-amber-300 bg-white"
