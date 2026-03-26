@@ -214,7 +214,7 @@ export interface LogEntry {
 }
 
 type GameStage = 'intro' | 'playing' | 'gameover';
-type GamePhase = 'selecting-home' | 'selecting-job' | 'free-play' | 'school' | 'home' | 'gym' | 'park' | 'grocery';
+type GamePhase = 'selecting-home' | 'selecting-job' | 'work' | 'free-play' | 'school' | 'home' | 'gym' | 'park' | 'grocery';
 
 // 4×4 district grid: row 0 top, row 3 bottom. Center of cell (c,r) = ((c+0.5)*25, (r+0.5)*25)
 const DISTRICT_POSITIONS: Record<DistrictName, { x: number; y: number }> = {
@@ -232,7 +232,10 @@ const LOCATION_POSITIONS: Record<Exclude<GamePhase, 'home'>, { x: number; y: num
   'gym': DISTRICT_POSITIONS.Semba,
   'park': DISTRICT_POSITIONS.Ellum,
   'grocery': DISTRICT_POSITIONS.Centerlight,
-  'selecting-job': DISTRICT_POSITIONS.Centerlight,
+  // Job Office (pick/accept a job offer)
+  'selecting-job': DISTRICT_POSITIONS.Marina,
+  // Workplace (go work your shift)
+  'work': DISTRICT_POSITIONS.Centerlight,
 };
 
 const LOCATION_PHASES: GamePhase[] = [
@@ -244,6 +247,7 @@ const LOCATION_PHASES: GamePhase[] = [
   'park',
   'grocery',
   'selecting-job',
+  'work',
 ];
 
 // Precompute max pairwise distance (all district centers + all phase positions).
@@ -605,6 +609,14 @@ export function LifeSimGame() {
   const [jobStartedYear, setJobStartedYear] = useState<number | null>(null); // first day in current job
   const [jobStartedDayOfYear, setJobStartedDayOfYear] = useState<number | null>(null);
   const [jobPerformance, setJobPerformance] = useState(70); // 0–100, C = 70%; start at C, on-time/overtime raises, late drops
+  // Tracks when the player first started working this job on this day.
+  // Used so "late" penalties apply when you start late (not when you continue a shift after starting early).
+  const [workShiftStarted, setWorkShiftStarted] = useState<{
+    jobId: string;
+    year: number;
+    dayOfYear: number;
+    hourOfDay: number;
+  } | null>(null);
   const [rentOverdue, setRentOverdue] = useState(false);
   const [rentOverdueSinceDay, setRentOverdueSinceDay] = useState(0);
   const [lastRentPaidSeasonEndDay, setLastRentPaidSeasonEndDay] = useState<number | null>(null); // 28, 56, 84, or 112
@@ -796,13 +808,13 @@ export function LifeSimGame() {
         ? UNIVERSITY_HOUSING_STUDENT_RENT
         : apartment.rent;
 
-    // Prorate rent by days left in current season
-    const SEASON_END_DAYS = [28, 56, 84, 112];
-    const seasonEnd = SEASON_END_DAYS.find((d) => d >= stats.dayOfYear) ?? 112;
-    const daysLeftInSeason = seasonEnd - stats.dayOfYear + 1;
-    const rentToCharge = fullSeasonRent > 0
-      ? Math.round((daysLeftInSeason / DAYS_PER_SEASON) * fullSeasonRent)
-      : 0;
+    // Prorate rent by days left in the current week.
+    // Apartment.rent is stored as "per season (28 days)" so we divide by 4 for weekly rent.
+    const WEEK_END_DAYS = [7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112];
+    const weekEnd = WEEK_END_DAYS.find((d) => d >= stats.dayOfYear) ?? 112;
+    const daysLeftInWeek = weekEnd - stats.dayOfYear + 1;
+    const weeklyRent = fullSeasonRent > 0 ? fullSeasonRent / 4 : 0;
+    const rentToCharge = weeklyRent > 0 ? Math.round((daysLeftInWeek / 7) * weeklyRent) : 0;
 
     if (rentToCharge > 0 && stats.money < rentToCharge) return;
     const moneyAfterRent = rentToCharge > 0 ? Math.max(0, stats.money - rentToCharge) : stats.money;
@@ -816,20 +828,20 @@ export function LifeSimGame() {
     setStats(newStats);
     setSelectedApartment(apartment);
     if (rentToCharge > 0) {
-      const firstSeasonEnd = [28, 56, 84, 112].find((d) => d >= stats.dayOfYear) ?? 28;
+      const firstWeekEnd = WEEK_END_DAYS.find((d) => d >= stats.dayOfYear) ?? 7;
       setLastRentPaidSeasonEndDay(
-        stats.dayOfYear <= 28 ? Math.max(0, firstSeasonEnd - DAYS_PER_SEASON) : firstSeasonEnd
+        stats.dayOfYear <= 7 ? Math.max(0, firstWeekEnd - 7) : firstWeekEnd
       );
     } else {
       setLastRentPaidSeasonEndDay(null);
     }
 
-    const isProrated = daysLeftInSeason < DAYS_PER_SEASON;
+    const isProrated = daysLeftInWeek < 7;
     const rentNote =
       rentToCharge > 0
         ? isMovingToUniversityHousing && isEnrolled
-          ? ` Student rate: ${isProrated ? `prorated rent ($${rentToCharge}) for ${daysLeftInSeason} days left` : 'first season\'s rent ($${rentToCharge})'} paid. Future rent due at end of each season (3-day grace).`
-          : ` ${isProrated ? `Prorated rent ($${rentToCharge}) for ${daysLeftInSeason} days left` : `First season's rent ($${rentToCharge})`} paid. Future rent due at end of each season (3-day grace).`
+          ? ` Student rate: ${isProrated ? `prorated rent ($${rentToCharge}) for ${daysLeftInWeek} days left` : 'first week\'s rent ($${rentToCharge})'} paid. Future rent due at end of each week (3-day grace).`
+          : ` ${isProrated ? `Prorated rent ($${rentToCharge}) for ${daysLeftInWeek} days left` : `First week\'s rent ($${rentToCharge})`} paid. Future rent due at end of each week (3-day grace).`
         : ' No rent.';
     const welcomeEntry: LogEntry = {
       id: Date.now(),
@@ -972,7 +984,9 @@ export function LifeSimGame() {
     if (job.workStartHour === 0 && job.workEndHourFull === 24) return true; // freelancer
     if (!isWeekday()) return false; // Mon–Fri only
     const endHour = getWorkEndHour(job);
-    return hour >= job.workStartHour && hour - HOURS_EARLY_WORK_START < endHour; //
+    // Allow coming in up to `HOURS_EARLY_WORK_START` hours early.
+    // Example: start at 8 with early=1 => can work starting at 7.
+    return hour >= job.workStartHour - HOURS_EARLY_WORK_START && hour < endHour;
   };
 
   const getHoursAvailableToWork = (job: Job, hour: number): number => {
@@ -992,6 +1006,30 @@ export function LifeSimGame() {
     return isDuringWorkHours(selectedJob, stats.hourOfDay) && getHoursAvailableToWork(selectedJob, stats.hourOfDay) > 0;
   };
 
+  // "Go to work" button should be enabled only if the player can still work
+  // after traveling to the Job Center.
+  const canGoToWorkNow = (): boolean => {
+    if (!selectedJob) return false;
+    if (!hasWaitedFirstDayForJob()) return false;
+
+    const minsToJobCenter = getTravelMinutes(
+      gamePhase,
+      'work',
+      selectedApartment?.district,
+      parkDistrict,
+      groceryDistrict
+    );
+    const arrivalHour = stats.hourOfDay + minsToJobCenter / 60;
+    return isDuringWorkHours(selectedJob, arrivalHour) && getHoursAvailableToWork(selectedJob, arrivalHour) > 0;
+  };
+
+  const getGoToWorkDisabledReason = (): string => {
+    if (!selectedJob) return 'No job selected.';
+    if (!hasWaitedFirstDayForJob()) return 'Come back tomorrow for your first day of work!';
+    if (!isWeekday()) return 'It\'s the weekend — work Mon–Fri only';
+    return 'Outside work hours — come back during your shift';
+  };
+
   const canWorkOvertimeNow = (): boolean => {
     if (!selectedJob || selectedJob.workStartHour === 0) return false;
     if (!hasWaitedFirstDayForJob()) return false;
@@ -1001,7 +1039,7 @@ export function LifeSimGame() {
   };
 
   const HUNGER_PER_HOUR = 0.5;
-  const HUNGER_PER_WORK_HOUR = 1;
+  const HUNGER_PER_WORK_HOUR = 1.5;
   const passOneHour = () => {
     advanceTime({ hunger: -HUNGER_PER_HOUR }, '1 hour passed.', 1);
   };
@@ -1021,15 +1059,43 @@ export function LifeSimGame() {
 
     if (!inOvertimeWindow && !inRegularHours) return;
 
+    const endHour = getWorkEndHour(selectedJob);
+    const overtimeWindowEndHour = endHour + 2; // matches canWorkOvertimeNow() window
+
     const baseHours = inOvertimeWindow ? 0 : getHoursAvailableToWork(selectedJob, stats.hourOfDay);
-    const totalHours = baseHours + overtimeHours;
-    const isOT = overtimeHours > 0;
+    const actualOvertimeHours = inOvertimeWindow
+      ? Math.min(overtimeHours, Math.max(0, overtimeWindowEndHour - stats.hourOfDay))
+      : 0;
+    if (inOvertimeWindow && actualOvertimeHours <= 0) return;
+
+    const totalHours = baseHours + actualOvertimeHours;
+    const isOT = actualOvertimeHours > 0;
     const hrRate = salaryPerHour(selectedJob);
     const basePay = hrRate * baseHours;
-    const otPay = isOT ? hrRate * overtimeHours * OVERTIME_MULTIPLIER : 0;
+    const otPay = isOT ? hrRate * actualOvertimeHours * OVERTIME_MULTIPLIER : 0;
     const actualPay = Math.round((basePay + otPay) * 100) / 100;
 
-    const late = !inOvertimeWindow && isLateForWork(selectedJob, stats.hourOfDay);
+    // Late penalties apply when you start the day's shift late,
+    // not when you "continue" working after starting early.
+    let late = false;
+    if (!inOvertimeWindow) {
+      const sameDayAndJob =
+        workShiftStarted != null &&
+        workShiftStarted.jobId === selectedJob.id &&
+        workShiftStarted.year === stats.year &&
+        workShiftStarted.dayOfYear === stats.dayOfYear;
+
+      const shiftStartHour = sameDayAndJob ? workShiftStarted!.hourOfDay : stats.hourOfDay;
+      if (!sameDayAndJob) {
+        setWorkShiftStarted({
+          jobId: selectedJob.id,
+          year: stats.year,
+          dayOfYear: stats.dayOfYear,
+          hourOfDay: stats.hourOfDay,
+        });
+      }
+      late = isLateForWork(selectedJob, shiftStartHour);
+    }
     const { perfDelta, happinessMultiplier } = WORK_INTENSITY[intensity];
     const newPerformance = Math.max(0, Math.min(100,
       jobPerformance + (late ? -LATE_WORK_PERFORMANCE_PENALTY : perfDelta)
@@ -1039,13 +1105,14 @@ export function LifeSimGame() {
     const healthDelta = (selectedJob.effect.health ?? 0) * totalHours / (8 * DAYS_PER_SEASON);
     const baseHappinessDelta = (selectedJob.effect.happiness ?? 0) * totalHours / (8 * DAYS_PER_SEASON);
     const happinessDelta = baseHappinessDelta * happinessMultiplier;
-    const energyCost = WORK_INTENSITY[intensity].energyCost;
+    const expectedShiftHours = inOvertimeWindow ? overtimeHours : workHoursPerShift();
+    const energyCost = WORK_INTENSITY[intensity].energyCost * (totalHours / expectedShiftHours);
 
     const jobTitle = getCurrentJobTitle(selectedJob);
     const intensityLabel = intensity === 'slack' ? 'Slack' : intensity === 'hard' ? 'Hard' : 'Normal';
     let msg = `You worked ${totalHours} hour${totalHours > 1 ? 's' : ''} as ${jobTitle} (${intensityLabel}). `;
     if (isOT) msg += '(Overtime) ';
-    if (!inOvertimeWindow && isLateForWork(selectedJob, stats.hourOfDay)) msg += '(Late — job performance dropped.) ';
+    if (late) msg += '(Late — job performance dropped.) ';
     msg += `Earned $${actualPay.toFixed(2)}.`;
 
     const hungerCost = -HUNGER_PER_WORK_HOUR * totalHours;
@@ -1117,26 +1184,28 @@ export function LifeSimGame() {
         lifeStageForDay === 'young adult' ? 3 : 0;
       healthDeltaFromDaily -= healthDecayPerDay;
 
-      const seasonEndDays = [28, 56, 84, 112];
-      const justCrossedSeasonEnd = seasonEndDays.includes(newDayOfYear - 1) || newDayOfYear === 1;
-      const seasonJustEnded = newDayOfYear === 1 ? 112 : newDayOfYear - 1;
+      const weekEndDays = [7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112];
+      const justCrossedWeekEnd = weekEndDays.includes(newDayOfYear - 1) || newDayOfYear === 1;
+      const weekJustEnded = newDayOfYear === 1 ? 112 : newDayOfYear - 1;
       const baseRent = overrideRentPerSeason ?? (newSelectedApartment ? newSelectedApartment.rent : 0);
       const rentPerSeason =
         newSelectedApartment?.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
           ? UNIVERSITY_HOUSING_STUDENT_RENT
           : baseRent;
-      const alreadyPaidForThisSeason = newLastRentPaidSeasonEndDay != null && newLastRentPaidSeasonEndDay >= seasonJustEnded;
+      const rentPerWeek = Math.round((rentPerSeason / 4) * 100) / 100;
+      const alreadyPaidForThisWeek =
+        newLastRentPaidSeasonEndDay != null && newLastRentPaidSeasonEndDay >= weekJustEnded;
 
-      if (justCrossedSeasonEnd && rentPerSeason > 0 && !newRentOverdue && !alreadyPaidForThisSeason) {
-        if (stats.money + moneyDelta >= rentPerSeason) {
-          moneyDelta -= rentPerSeason;
-          newLastRentPaidSeasonEndDay = seasonJustEnded;
+      if (justCrossedWeekEnd && rentPerWeek > 0 && !newRentOverdue && !alreadyPaidForThisWeek) {
+        if (stats.money + moneyDelta >= rentPerWeek) {
+          moneyDelta -= rentPerWeek;
+          newLastRentPaidSeasonEndDay = weekJustEnded;
           setEventLog((prev) => [
             {
               id: Date.now() + 400,
-              text: `Rent paid: $${rentPerSeason.toLocaleString()} for the season.`,
+              text: `Rent paid: $${rentPerWeek.toLocaleString()} for the week.`,
               timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
-              effects: { money: -rentPerSeason },
+              effects: { money: -rentPerWeek },
             },
             ...prev,
           ]);
@@ -1145,6 +1214,8 @@ export function LifeSimGame() {
           newRentOverdueSinceDay = newDayOfYear;
         }
       }
+
+      const seasonEndDays = [28, 56, 84, 112];
 
       // Tuition reminder: 3 days before season end if enrolled in a degree.
       if (
@@ -1162,18 +1233,20 @@ export function LifeSimGame() {
         ]);
       }
 
-      // Rent reminder: 3 days before season end when rent > 0 and not living with parents.
-      const rentPerSeasonForReminder = newSelectedApartment?.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
-        ? UNIVERSITY_HOUSING_STUDENT_RENT
-        : (newSelectedApartment?.rent ?? 0);
+      // Rent reminder: 3 days before week end when rent > 0 and not living with parents.
+      const rentPerSeasonForReminder =
+        newSelectedApartment?.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
+          ? UNIVERSITY_HOUSING_STUDENT_RENT
+          : newSelectedApartment?.rent ?? 0;
+      const rentPerWeekForReminder = Math.round((rentPerSeasonForReminder / 4) * 100) / 100;
       if (
-        rentPerSeasonForReminder > 0 &&
-        seasonEndDays.some((end) => newDayOfYear === end - 3)
+        rentPerWeekForReminder > 0 &&
+        weekEndDays.some((end) => newDayOfYear === end - RENT_GRACE_DAYS)
       ) {
         setEventLog((prev) => [
           {
             id: Date.now() + 301,
-            text: `📱 Rent reminder: In 3 days you will owe $${rentPerSeasonForReminder.toLocaleString()} rent for the next season. Open your phone to pay now.`,
+            text: `📱 Rent reminder: In ${RENT_GRACE_DAYS} days you will owe $${rentPerWeekForReminder.toLocaleString()} rent for the next week. Open your phone to pay now.`,
             timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
             effects: {},
           },
@@ -1398,42 +1471,45 @@ export function LifeSimGame() {
 
   const payRentNow = (): boolean => {
     if (!selectedApartment || selectedApartment.id === LIVE_WITH_PARENTS_ID) return false;
-    const SEASON_END_DAYS = [28, 56, 84, 112];
+    const WEEK_END_DAYS = [7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112];
     const rentForSeason =
       selectedApartment.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
         ? UNIVERSITY_HOUSING_STUDENT_RENT
         : selectedApartment.rent;
-    const seasonIndex = SEASON_END_DAYS.findIndex((d) => d >= stats.dayOfYear);
-    const currentSeasonEnd = seasonIndex >= 0 ? SEASON_END_DAYS[seasonIndex] : 112;
-    const targetSeasonEnd = rentOverdue
+    const rentForWeek = Math.round((rentForSeason / 4) * 100) / 100;
+
+    const weekIndex = WEEK_END_DAYS.findIndex((d) => d >= stats.dayOfYear);
+    const currentWeekEnd = weekIndex >= 0 ? WEEK_END_DAYS[weekIndex] : 112;
+    const targetWeekEnd = rentOverdue
       ? (rentOverdueSinceDay === 1 ? 112 : rentOverdueSinceDay - 1)
-      : currentSeasonEnd;
-    if (lastRentPaidSeasonEndDay != null && lastRentPaidSeasonEndDay >= targetSeasonEnd && !rentOverdue) {
+      : currentWeekEnd;
+
+    if (lastRentPaidSeasonEndDay != null && lastRentPaidSeasonEndDay >= targetWeekEnd && !rentOverdue) {
       setEventLog((prev) => [{
         id: Date.now(),
-        text: 'You already paid rent for this season.',
+        text: 'You already paid rent for this week.',
         timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
         effects: {},
       }, ...prev]);
       return false;
     }
-    if (stats.money < rentForSeason) {
+    if (stats.money < rentForWeek) {
       setEventLog((prev) => [{
         id: Date.now(),
-        text: `You can't afford rent ($${rentForSeason.toLocaleString()}). You have $${stats.money.toLocaleString()}.`,
+        text: `You can't afford rent ($${rentForWeek.toLocaleString()}). You have $${stats.money.toLocaleString()}.`,
         timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
         effects: {},
       }, ...prev]);
       return false;
     }
-    setStats((prev) => ({ ...prev, money: prev.money - rentForSeason }));
-    setLastRentPaidSeasonEndDay(targetSeasonEnd);
+    setStats((prev) => ({ ...prev, money: prev.money - rentForWeek }));
+    setLastRentPaidSeasonEndDay(targetWeekEnd);
     if (rentOverdue) { setRentOverdue(false); setRentOverdueSinceDay(0); }
     setEventLog((prev) => [{
       id: Date.now(),
-      text: `You paid $${rentForSeason.toLocaleString()} rent.`,
+      text: `You paid $${rentForWeek.toLocaleString()} rent for the week.`,
       timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
-      effects: { money: -rentForSeason },
+      effects: { money: -rentForWeek },
     }, ...prev]);
     return true;
   };
@@ -1731,7 +1807,9 @@ export function LifeSimGame() {
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Choose your starting life path</p>
-                  <p className="text-xs text-gray-500">Each path has a different look in the character view.</p>
+                  <p className="text-xs text-gray-500">
+                    Each path shows a preview sprite for now (shared normal boy/girl assets; rich/poor looks later).
+                  </p>
                   <div className="grid grid-cols-1 gap-3">
                     {CHARACTER_PRESETS.map((preset) => {
                       const thumb =
@@ -1757,7 +1835,7 @@ export function LifeSimGame() {
                               height={80}
                               loading="lazy"
                               decoding="async"
-                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-cover object-top flex-shrink-0 ring-1 ring-black/10 shadow-sm"
+                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-contain object-center flex-shrink-0 ring-1 ring-black/10 shadow-sm [image-rendering:pixelated]"
                               aria-hidden
                             />
                           ) : null}
@@ -2283,7 +2361,14 @@ export function LifeSimGame() {
                       <div className="text-[10px] text-gray-500 mt-0.5">
                         {selectedApartment && (rentOverdue
                           ? `Rent overdue! (${RENT_GRACE_DAYS}d grace)`
-                          : `Rent $${selectedApartment.rent}/season`)}
+                          : (() => {
+                              const rentForDisplay =
+                                selectedApartment.id === UNIVERSITY_HOUSING_ID && educationLevel === 'in-progress'
+                                  ? UNIVERSITY_HOUSING_STUDENT_RENT
+                                  : selectedApartment.rent;
+                              const rentPerWeek = Math.round((rentForDisplay / 4) * 100) / 100;
+                              return `Rent $${rentPerWeek}/week`;
+                            })())}
                       </div>
                     </div>
                     <div>
@@ -2339,24 +2424,55 @@ export function LifeSimGame() {
                         Job
                       </div>
                       {selectedJob ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="cursor-help underline decoration-dotted decoration-gray-400 truncate">
-                              {getCurrentJobTitle(selectedJob)}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-xs text-left">
-                            <div className="space-y-2 whitespace-pre-line text-sm">
-                              {getJobScheduleLabel(selectedJob, jobSchedule)}
-                              <div className="border-t border-white/20 pt-2 mt-2 font-medium">
-                                Pay: ${salaryPerDay(selectedJob).toFixed(2)}/day · ${salaryPerHour(selectedJob).toFixed(2)}/hr
-                                <br />
-                                ${(salaryPerDay(selectedJob) * 7).toFixed(2)}/week · ${getEffectiveSalary(selectedJob).toFixed(2)}/season
+                        <div className="flex flex-col gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-help underline decoration-dotted decoration-gray-400 truncate">
+                                {getCurrentJobTitle(selectedJob)}
                               </div>
-                              <div>Performance: {getPerformanceGrade(jobPerformance)} ({jobPerformance.toFixed(0)}%)</div>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-xs text-left">
+                              <div className="space-y-2 whitespace-pre-line text-sm">
+                                {getJobScheduleLabel(selectedJob, jobSchedule)}
+                                <div className="border-t border-white/20 pt-2 mt-2 font-medium">
+                                  Pay: ${salaryPerDay(selectedJob).toFixed(2)}/day · ${salaryPerHour(selectedJob).toFixed(2)}/hr
+                                  <br />
+                                  ${(salaryPerDay(selectedJob) * 7).toFixed(2)}/week · ${getEffectiveSalary(selectedJob).toFixed(2)}/season
+                                </div>
+                                <div>
+                                  Performance: {getPerformanceGrade(jobPerformance)} ({jobPerformance.toFixed(0)}%)
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+
+                          {gamePhase === 'work' ? (
+                            <span className="text-blue-600 text-[10px] font-medium">At workplace</span>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-block w-fit">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 w-fit"
+                                    disabled={!canGoToWorkNow()}
+                                    onClick={() => {
+                                      // Ensure JobCenter phase actually renders (it's skipped while the overlay is open).
+                                      setMapOverlayOpen(false);
+                                      navigateTo('work');
+                                    }}
+                                  >
+                                    Go to work
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-xs text-left">
+                                {canGoToWorkNow() ? 'You can reach the workplace and work now.' : getGoToWorkDisabledReason()}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       ) : (
                         <div className="truncate">No job</div>
                       )}
@@ -2438,6 +2554,7 @@ export function LifeSimGame() {
               onAskForPromotion={askForPromotion}
               onGoToSchool={() => navigateTo('school')}
               onGoToJobSelection={() => navigateTo('selecting-job')}
+              onGoToWork={() => navigateTo('work')}
               onGoToHomeSelection={() => navigateTo('selecting-home')}
               onGoToHome={() => navigateTo('home')}
               onGoToGym={() => navigateTo('gym')}
@@ -2795,7 +2912,7 @@ export function LifeSimGame() {
                         className="h-6 text-[10px] border-purple-300 text-purple-700 hover:bg-purple-50"
                         onClick={handleSimulateNextDay}
                       >
-                        Simulate next day
+                        Simulate next 'real' time day
                       </Button>
                       <select
                         className="h-6 text-[10px] px-2 rounded border border-amber-300 bg-white"

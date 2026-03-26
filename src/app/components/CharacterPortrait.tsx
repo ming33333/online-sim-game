@@ -10,11 +10,15 @@ const BG: Record<PortraitPresetId, string> = {
   struggling: 'bg-gradient-to-b from-stone-300 via-stone-200 to-stone-400 ring-2 ring-stone-400/60 shadow-inner',
 };
 
-/** Public URLs for life-path portraits (served from `/public/assets/characters/`). */
+/**
+ * Life-path portraits (PixelLab exports under `public/assets/characters/`).
+ * Temporary: normal boy + girl rotations until rich/poor-specific sprites exist.
+ * — privileged: boy facing south · middle: girl facing south · struggling: boy south-east (distinct thumb)
+ */
 export const CHARACTER_PORTRAIT_URLS: Record<PortraitPresetId, string> = {
-  privileged: '/assets/characters/character-privileged.png',
-  middle: '/assets/characters/character-middle.png',
-  struggling: '/assets/characters/character-struggling.png',
+  privileged: '/assets/characters/normal_boy_from_the_city/rotations/south.png',
+  middle: '/assets/characters/normal_girl_from_the_city/rotations/south.png',
+  struggling: '/assets/characters/normal_boy_from_the_city/rotations/south-east.png',
 };
 
 function isPresetId(id: string | null | undefined): id is PortraitPresetId {
@@ -60,8 +64,8 @@ export function CharacterPortrait({
             alt={alt}
             loading={isIntro ? 'eager' : 'lazy'}
             decoding="async"
-            className={`w-full object-cover object-top select-none ${
-              isIntro ? 'max-h-[320px] rounded-xl shadow-sm' : 'max-h-[200px] rounded-lg shadow-sm'
+            className={`w-full select-none object-contain object-center [image-rendering:pixelated] ${
+              isIntro ? 'max-h-[340px] rounded-xl shadow-sm' : 'max-h-[200px] rounded-lg shadow-sm'
             }`}
           />
         ) : (

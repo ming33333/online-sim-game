@@ -386,10 +386,11 @@ export function advanceTime(
       : 0;
     healthDeltaFromDaily -= healthDecayPerDay;
 
-    const justCrossedSeasonEnd =
-      SEASON_END_DAYS.includes((newDayOfYear - 1) as 28) ||
+    const weekEndDays = [7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112];
+    const justCrossedWeekEnd =
+      weekEndDays.includes((newDayOfYear - 1) as 28) ||
       (newDayOfYear === 1 && stats.dayOfYear === DAYS_PER_YEAR);
-    const seasonJustEnded = newDayOfYear === 1 ? 112 : newDayOfYear - 1;
+    const weekJustEnded = newDayOfYear === 1 ? 112 : newDayOfYear - 1;
     const rentPerSeason =
       overrideRentPerSeason ?? (newSelectedApartment ? newSelectedApartment.rent : 0);
     const isUniversityHousing = newSelectedApartment?.id === UNIVERSITY_HOUSING_ID;
@@ -397,19 +398,20 @@ export function advanceTime(
       isUniversityHousing && state.educationLevel === 'in-progress'
         ? UNIVERSITY_HOUSING_STUDENT_RENT
         : rentPerSeason;
+    const actualRentPerWeek = Math.round((actualRent / 4) * 100) / 100;
     const alreadyPaidForThisSeason =
       newLastRentPaidSeasonEndDay != null &&
-      newLastRentPaidSeasonEndDay >= seasonJustEnded;
+      newLastRentPaidSeasonEndDay >= weekJustEnded;
 
     if (
-      justCrossedSeasonEnd &&
-      actualRent > 0 &&
+      justCrossedWeekEnd &&
+      actualRentPerWeek > 0 &&
       !newRentOverdue &&
       !alreadyPaidForThisSeason
     ) {
-      if (stats.money + moneyDelta >= actualRent) {
-        moneyDelta -= actualRent;
-        newLastRentPaidSeasonEndDay = seasonJustEnded;
+      if (stats.money + moneyDelta >= actualRentPerWeek) {
+        moneyDelta -= actualRentPerWeek;
+        newLastRentPaidSeasonEndDay = weekJustEnded;
       } else {
         newRentOverdue = true;
         newRentOverdueSinceDay = newDayOfYear;
@@ -571,12 +573,11 @@ export function selectApartment(state: GameState, apartment: Apartment): EngineR
       ? UNIVERSITY_HOUSING_STUDENT_RENT
       : apartment.rent;
 
-  const seasonEnd = SEASON_END_DAYS.find((d) => d >= state.stats.dayOfYear) ?? 112;
-  const daysLeftInSeason = seasonEnd - state.stats.dayOfYear + 1;
-  const rentToCharge =
-    fullSeasonRent > 0
-      ? Math.round((daysLeftInSeason / DAYS_PER_SEASON) * fullSeasonRent)
-      : 0;
+  const weekEndDays = [7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112];
+  const weekEnd = weekEndDays.find((d) => d >= state.stats.dayOfYear) ?? 112;
+  const daysLeftInWeek = weekEnd - state.stats.dayOfYear + 1;
+  const weeklyRent = fullSeasonRent > 0 ? fullSeasonRent / 4 : 0;
+  const rentToCharge = weeklyRent > 0 ? Math.round((daysLeftInWeek / 7) * weeklyRent) : 0;
 
   if (rentToCharge > 0 && state.stats.money < rentToCharge) {
     return { state, logEntries: [], gameOver: false, success: false };
@@ -595,13 +596,13 @@ export function selectApartment(state: GameState, apartment: Apartment): EngineR
     money: moneyAfterRent,
   };
 
-  const firstSeasonEnd = SEASON_END_DAYS.find((d) => d >= state.stats.dayOfYear) ?? 28;
+  const firstWeekEnd = weekEndDays.find((d) => d >= state.stats.dayOfYear) ?? 7;
   const newLastRentPaid =
-    rentToCharge > 0 ? firstSeasonEnd : null;
+    rentToCharge > 0 ? (state.stats.dayOfYear <= 7 ? Math.max(0, firstWeekEnd - 7) : firstWeekEnd) : null;
 
   const rentNote =
     rentToCharge > 0
-      ? ` First season's rent ($${rentToCharge}) paid.`
+      ? ` First week's rent ($${rentToCharge}) paid.`
       : ' No rent.';
 
   const logEntry: LogEntry = {
