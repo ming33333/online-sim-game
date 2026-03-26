@@ -12,6 +12,8 @@ import { GymView } from './GymView';
 import type { GymTier } from './GymView';
 import { ParkView } from './ParkView';
 import { GroceryStoreView } from './GroceryStoreView';
+import type { HomeFurnitureState } from '../lib/furniture';
+import type { WeatherConditions } from '../lib/weather';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
   DropdownMenu,
@@ -20,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 
-type MapPhase = 'selecting-home' | 'selecting-job' | 'free-play' | 'school' | 'home' | 'gym' | 'park' | 'grocery';
+type MapPhase = 'selecting-home' | 'selecting-job' | 'work' | 'free-play' | 'school' | 'home' | 'gym' | 'park' | 'grocery';
 
 export interface InteractiveMapProps {
   stats: GameStats;
@@ -29,7 +31,7 @@ export interface InteractiveMapProps {
     resultText: string,
     daysPassed: number
   ) => void;
-  gamePhase: 'selecting-home' | 'selecting-job' | 'free-play' | 'school' | 'home' | 'gym' | 'park' | 'grocery';
+  gamePhase: 'selecting-home' | 'selecting-job' | 'work' | 'free-play' | 'school' | 'home' | 'gym' | 'park' | 'grocery';
   apartments: Apartment[];
   jobs: Job[];
   selectedJob: Job | null;
@@ -52,6 +54,7 @@ export interface InteractiveMapProps {
   onAskForPromotion: () => void;
   onGoToSchool: () => void;
   onGoToJobSelection: () => void;
+  onGoToWork: () => void;
   onGoToHomeSelection: () => void;
   onGoToHome: () => void;
   onGoToGym: () => void;
@@ -79,8 +82,12 @@ export interface InteractiveMapProps {
   onParkWalk: () => void;
   onSleep: (hours: number) => void;
   onEatMeal: (type: 'regular' | 'lux') => void;
+  onChill: (hours: number) => void;
+  onBuyFurniture: (itemId: string) => void;
+  homeFurniture: HomeFurnitureState;
+  isLiveWithParents: boolean;
   groceries: { regular: number; lux: number };
-  currentWeather: { type: string; tempF: number; quality: string } | null;
+  currentWeather: WeatherConditions | null;
   getTravelMinutes: (targetPhase: MapPhase, destDistrict?: DistrictName) => number;
   mapOverlayOpen?: boolean;
   onCloseMapOverlay?: () => void;
@@ -157,6 +164,7 @@ const getDistrictOptions = (
     onGoToPark: (d: DistrictName) => void;
     onGoToGrocery: (d: DistrictName) => void;
     onGoToJobSelection: () => void;
+    onGoToWork: () => void;
   }
 ): DistrictOption[] => {
   const homeOption: DistrictOption[] =
@@ -170,9 +178,10 @@ const getDistrictOptions = (
   ];
   if (district === 'Dewmist') return [{ label: 'School', phase: 'school', navigate: handlers.onGoToSchool }, ...base];
   if (district === 'Semba') return [{ label: 'Gym', phase: 'gym', navigate: handlers.onGoToGym }, ...base];
+  if (district === 'Marina') return [{ label: 'Job Office', phase: 'selecting-job', navigate: handlers.onGoToJobSelection }, ...base];
   if (district === 'Centerlight')
     return [
-      { label: 'Job Center', phase: 'selecting-job', navigate: handlers.onGoToJobSelection },
+      { label: 'Job Center', phase: 'work', navigate: handlers.onGoToWork },
       { label: 'Housing Office', phase: 'selecting-home', navigate: handlers.onGoToHomeSelection },
       ...base,
     ];
@@ -184,7 +193,10 @@ const PHASE_TO_POSITION: Record<Exclude<MapPhase, 'home' | 'park' | 'grocery'>, 
   school: DISTRICT_POSITIONS.Dewmist,
   'selecting-home': DISTRICT_POSITIONS.Centerlight,
   gym: DISTRICT_POSITIONS.Semba,
-  'selecting-job': DISTRICT_POSITIONS.Centerlight,
+  // Job Office (pick/accept a job offer)
+  'selecting-job': DISTRICT_POSITIONS.Marina,
+  // Workplace (go work your shift)
+  work: DISTRICT_POSITIONS.Centerlight,
 };
 
 function getMapPosition(
@@ -226,6 +238,7 @@ export function InteractiveMap({
   onAskForPromotion,
   onGoToSchool,
   onGoToJobSelection,
+  onGoToWork,
   onGoToHomeSelection,
   onGoToHome,
   onGoToGym,
@@ -250,6 +263,10 @@ export function InteractiveMap({
   onParkWalk,
   onSleep,
   onEatMeal,
+  onChill,
+  onBuyFurniture,
+  homeFurniture,
+  isLiveWithParents,
   groceries,
   currentWeather,
   getTravelMinutes,
@@ -473,11 +490,16 @@ export function InteractiveMap({
         onOpenMapOverlay={onOpenMapOverlay}
         apartmentName={selectedApartment?.name ?? 'Your Home'}
         apartmentRent={selectedApartment?.rent ?? 0}
+        isLiveWithParents={isLiveWithParents}
         currentEnergy={stats.energy}
         currentHunger={stats.hunger}
+        currentMoney={stats.money}
         groceries={groceries}
+        homeFurniture={homeFurniture}
         onSleep={onSleep}
         onEatMeal={onEatMeal}
+        onChill={onChill}
+        onBuyFurniture={onBuyFurniture}
       />
     );
   }
@@ -519,10 +541,43 @@ export function InteractiveMap({
     );
   }
 
-  // Job Selection Phase (skip when map overlay open)
+  // Workplace (work shifts) - skip when map overlay open
+  if (!showMapOverlay && gamePhase === 'work') {
+    return (
+      <JobCenter
+        mode="work"
+        jobs={jobs}
+        selectedJob={selectedJob}
+        onSelectJob={onSelectJob}
+        onWorkShift={onWorkShift}
+        onWorkOvertime={onWorkOvertime}
+        workHoursPerShift={workHoursPerShift}
+        canWorkNow={canWorkNow}
+        canWorkOvertimeNow={canWorkOvertimeNow}
+        isFirstDayOfWork={isFirstDayOfWork}
+        isWeekday={((stats.dayOfYear - 1) % 7) < 5}
+        onPassOneHour={onPassOneHour}
+        jobSchedule={jobSchedule}
+        setJobSchedule={setJobSchedule}
+        stats={stats}
+        getSalaryPerDay={getSalaryPerDay}
+        getSalaryPerHour={getSalaryPerHour}
+        getEffectiveSalary={getEffectiveSalary}
+        getCurrentJobTitle={getCurrentJobTitle}
+        promotionCheck={promotionCheck}
+        onAskForPromotion={onAskForPromotion}
+        onOpenMapOverlay={onOpenMapOverlay}
+        educationLevel={educationLevel}
+        educationDegree={educationDegree}
+      />
+    );
+  }
+
+  // Job Office (job selection / hiring) - skip when map overlay open
   if (!showMapOverlay && gamePhase === 'selecting-job') {
     return (
       <JobCenter
+        mode="selection"
         jobs={jobs}
         selectedJob={selectedJob}
         onSelectJob={onSelectJob}
@@ -639,6 +694,7 @@ export function InteractiveMap({
               onGoToPark,
               onGoToGrocery,
               onGoToJobSelection,
+              onGoToWork,
             });
             const optionList = options.map((o) => o.label).join(', ');
             return (
