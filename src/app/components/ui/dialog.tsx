@@ -49,11 +49,15 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  overlayClassName,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  /** Darker overlay for game events (default is bg-black/50). */
+  overlayClassName?: string;
+}) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay className={cn(overlayClassName)} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

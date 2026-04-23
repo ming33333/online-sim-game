@@ -2,7 +2,7 @@
  * Furniture & appliances for home — affects sleep, meals, spoilage, chill.
  */
 
-export type FurnitureCategory = 'bed' | 'fridge' | 'stove' | 'decoration';
+export type FurnitureCategory = 'bed' | 'fridge' | 'stove' | 'decoration' | 'tv';
 
 export interface FurnitureItem {
   id: string;
@@ -21,23 +21,36 @@ export interface FurnitureItem {
   dailyHappinessBonus?: number;
   /** Bonus happiness per hour of chill (decoration) */
   chillHappinessPerHour?: number;
+  /** Max meal portions this fridge can store */
+  fridgeCapacity?: number;
+  /** Happiness gained per hour while watching TV */
+  watchHappinessPerHour?: number;
 }
 
 export const FURNITURE_ITEMS: FurnitureItem[] = [
   {
     id: 'bed-futon',
     name: 'Futon',
-    description: 'Basic sleep. Slightly better rest.',
+    description: 'Basic sleep. It is uncomfortable and slightly hurts recovery.',
     cost: 180,
     category: 'bed',
     icon: '🛏️',
-    sleepEnergyPerHour: 2,
+    sleepEnergyPerHour: -2,
   },
   {
     id: 'bed-queen',
-    name: 'Queen mattress',
-    description: 'Comfortable sleep restores more energy.',
+    name: 'Standard bed',
+    description: 'Neutral sleep quality. No bonus or penalty.',
     cost: 650,
+    category: 'bed',
+    icon: '🛌',
+    sleepEnergyPerHour: 0,
+  },
+  {
+    id: 'bed-luxury',
+    name: 'Luxury bed',
+    description: 'Premium comfort for excellent recovery.',
+    cost: 1800,
     category: 'bed',
     icon: '🛌',
     sleepEnergyPerHour: 5,
@@ -45,28 +58,31 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
   {
     id: 'fridge-mini',
     name: 'Mini fridge',
-    description: 'Stops spoilage. Buzzes loudly — hurts mood a bit.',
+    description: 'Stops spoilage. Holds up to 5 meal portions. Buzzes loudly — hurts mood a bit.',
     cost: 220,
     category: 'fridge',
     icon: '🧊',
+    fridgeCapacity: 5,
     dailyHappinessPenalty: 0.5,
     dailyHungerPenalty: 0.25,
   },
   {
     id: 'fridge-standard',
     name: 'Standard fridge',
-    description: 'Keeps food fresh. No drawbacks.',
+    description: 'Keeps food fresh. Holds up to 8 meal portions.',
     cost: 480,
     category: 'fridge',
     icon: '🧃',
+    fridgeCapacity: 8,
   },
   {
     id: 'fridge-french',
     name: 'French-door fridge',
-    description: 'Premium cooling. Small happiness boost from a nice kitchen.',
+    description: 'Premium cooling. Holds up to 10 meal portions. Small happiness boost.',
     cost: 1200,
     category: 'fridge',
     icon: '❄️',
+    fridgeCapacity: 10,
     dailyHappinessBonus: 0.35,
   },
   {
@@ -114,6 +130,33 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     icon: '🖼️',
     chillHappinessPerHour: 2,
   },
+  {
+    id: 'tv-antique',
+    name: 'Black & white TV',
+    description: 'Retro shows. Low happiness per hour watched.',
+    cost: 85,
+    category: 'tv',
+    icon: '📺',
+    watchHappinessPerHour: 1,
+  },
+  {
+    id: 'tv-crt',
+    name: 'CRT color TV',
+    description: 'Cable and snacks. Decent mood lift.',
+    cost: 320,
+    category: 'tv',
+    icon: '📺',
+    watchHappinessPerHour: 4,
+  },
+  {
+    id: 'tv-plasma',
+    name: 'Flat plasma screen',
+    description: 'Cinema at home. Up to +10 happiness per hour.',
+    cost: 1400,
+    category: 'tv',
+    icon: '🖥️',
+    watchHappinessPerHour: 10,
+  },
 ];
 
 export const FURNITURE_BY_ID: Record<string, FurnitureItem> = Object.fromEntries(
@@ -124,6 +167,7 @@ export interface HomeFurnitureState {
   bedId: string | null;
   fridgeId: string | null;
   stoveId: string | null;
+  tvId: string | null;
   decorationIds: string[];
 }
 
@@ -131,12 +175,24 @@ export const EMPTY_HOME_FURNITURE: HomeFurnitureState = {
   bedId: null,
   fridgeId: null,
   stoveId: null,
+  tvId: null,
+  decorationIds: [],
+};
+
+/** Parents' house: your room has a normal bed; shared kitchen has a standard fridge (spoil rules still use live-with-parents Infinity cap in game logic). */
+export const LIVE_WITH_PARENTS_DEFAULT_FURNITURE: HomeFurnitureState = {
+  bedId: 'bed-queen',
+  fridgeId: 'fridge-standard',
+  stoveId: null,
+  tvId: null,
   decorationIds: [],
 };
 
 export function getSleepEnergyBonusPerHour(f: HomeFurnitureState): number {
   const bed = f.bedId ? FURNITURE_BY_ID[f.bedId] : null;
-  return bed?.sleepEnergyPerHour ?? 0;
+  // No bed is intentionally harsh.
+  if (!bed) return -5;
+  return bed.sleepEnergyPerHour ?? 0;
 }
 
 export function getEatHungerBonus(f: HomeFurnitureState): number {
@@ -146,6 +202,18 @@ export function getEatHungerBonus(f: HomeFurnitureState): number {
 
 export function hasFridge(f: HomeFurnitureState): boolean {
   return f.fridgeId != null;
+}
+
+export function getFridgeMealCapacity(fridgeId: string | null): number | null {
+  if (!fridgeId) return null;
+  const item = FURNITURE_BY_ID[fridgeId];
+  return item?.fridgeCapacity ?? null;
+}
+
+export function getWatchHappinessPerHour(f: HomeFurnitureState): number {
+  if (!f.tvId) return 0;
+  const tv = FURNITURE_BY_ID[f.tvId];
+  return tv?.watchHappinessPerHour ?? 0;
 }
 
 export function getFridgeDailyEffects(f: HomeFurnitureState): {

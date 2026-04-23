@@ -1,3 +1,17 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+@keyframes heart-vitals {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-heart-vitals {
+  animation: heart-vitals 1s ease-in-out infinite;
+}

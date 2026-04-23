@@ -32,7 +32,10 @@ export interface StatsSnapshot {
   energy: number;
   hunger: number;
   money: number;
+  beauty: number;
   smarts: number;
+  fitness: number;
+  social: number;
 }
 
 export interface MoneyEvent {
@@ -209,7 +212,10 @@ export function runSimulation(
         energy: newState.stats.energy,
         hunger: newState.stats.hunger,
         money: newState.stats.money,
+        beauty: newState.stats.beauty,
         smarts: newState.stats.smarts,
+        fitness: newState.stats.fitness,
+        social: newState.stats.social,
       });
       inventoryOverTime.push({
         tick,

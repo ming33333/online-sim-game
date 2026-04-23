@@ -2,6 +2,7 @@ import React from 'react';
 import { UserRound } from 'lucide-react';
 
 export type PortraitPresetId = 'privileged' | 'middle' | 'struggling';
+export type CharacterGender = 'boy' | 'girl';
 
 const BG: Record<PortraitPresetId, string> = {
   privileged:
@@ -10,15 +11,31 @@ const BG: Record<PortraitPresetId, string> = {
   struggling: 'bg-gradient-to-b from-stone-300 via-stone-200 to-stone-400 ring-2 ring-stone-400/60 shadow-inner',
 };
 
+const PRESET_TO_ASSET: Record<PortraitPresetId, 'rich' | 'normal' | 'poor'> = {
+  privileged: 'rich',
+  middle: 'normal',
+  struggling: 'poor',
+};
+
 /**
  * Life-path portraits (PixelLab exports under `public/assets/characters/`).
- * Temporary: normal boy + girl rotations until rich/poor-specific sprites exist.
- * — privileged: boy facing south · middle: girl facing south · struggling: boy south-east (distinct thumb)
+ * Each life path maps to rich / normal / poor; gender picks boy vs girl sprites.
  */
+export function getCharacterPortraitUrl(
+  presetId: PortraitPresetId,
+  gender: CharacterGender,
+  rotation: 'south' | 'south-east' = 'south'
+): string {
+  const tier = PRESET_TO_ASSET[presetId];
+  const rot = rotation === 'south-east' ? 'south-east' : 'south';
+  return `/assets/characters/${tier}_${gender}_from_the_city/rotations/${rot}.png`;
+}
+
+/** @deprecated Use getCharacterPortraitUrl — kept for quick lookups without gender */
 export const CHARACTER_PORTRAIT_URLS: Record<PortraitPresetId, string> = {
-  privileged: '/assets/characters/normal_boy_from_the_city/rotations/south.png',
-  middle: '/assets/characters/normal_girl_from_the_city/rotations/south.png',
-  struggling: '/assets/characters/normal_boy_from_the_city/rotations/south-east.png',
+  privileged: getCharacterPortraitUrl('privileged', 'boy'),
+  middle: getCharacterPortraitUrl('middle', 'girl'),
+  struggling: getCharacterPortraitUrl('struggling', 'boy', 'south-east'),
 };
 
 function isPresetId(id: string | null | undefined): id is PortraitPresetId {
@@ -27,6 +44,8 @@ function isPresetId(id: string | null | undefined): id is PortraitPresetId {
 
 export interface CharacterPortraitProps {
   presetId: string | null | undefined;
+  /** Defaults to girl to match prior middle-path preview */
+  gender?: CharacterGender;
   name?: string;
   subtitle?: string;
   /** intro = taller hero; panel = sidebar during play */
@@ -36,6 +55,7 @@ export interface CharacterPortraitProps {
 
 export function CharacterPortrait({
   presetId,
+  gender = 'girl',
   name,
   subtitle,
   variant = 'panel',
@@ -43,6 +63,10 @@ export function CharacterPortrait({
 }: CharacterPortraitProps) {
   const resolved = isPresetId(presetId) ? presetId : null;
   const isIntro = variant === 'intro';
+
+  const thumbRotation: 'south' | 'south-east' =
+    resolved === 'struggling' ? 'south-east' : 'south';
+  const src = resolved ? getCharacterPortraitUrl(resolved, gender, thumbRotation) : null;
 
   const alt =
     resolved && name
@@ -58,9 +82,9 @@ export function CharacterPortrait({
           resolved ? BG[resolved] : 'bg-gradient-to-b from-gray-100 to-gray-200 ring-2 ring-dashed ring-gray-300'
         } ${isIntro ? 'min-h-[280px] max-h-[360px] py-4' : 'min-h-[140px] max-h-[220px] py-2'}`}
       >
-        {resolved ? (
+        {src ? (
           <img
-            src={CHARACTER_PORTRAIT_URLS[resolved]}
+            src={src}
             alt={alt}
             loading={isIntro ? 'eager' : 'lazy'}
             decoding="async"

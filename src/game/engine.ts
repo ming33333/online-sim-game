@@ -3,32 +3,42 @@
  */
 
 import { getWeatherForDay, isGoodWeatherForWalk } from '../app/lib/weather';
+import { rollWorkoutBeautyDelta } from '../app/lib/beautyCare';
+import { round2, fmt2, formatMoney } from '../app/lib/formatNumber';
 import {
   APARTMENTS,
   CHARACTER_PRESETS,
+  PARK_WALK_SOCIAL_GAIN,
+  WORKOUT_FITNESS_GAIN,
   DAYS_PER_SEASON,
   DAYS_PER_YEAR,
   DEGREE_DAYS_NORMAL,
   GYM_COSTS_PER_WEEK,
   GYM_HAPPINESS,
-  HUNGER_PER_HOUR,
+  HUNGER_PASS_ONE_HOUR,
   HUNGER_PER_WORK_HOUR,
+  WORK_ENERGY_MULTIPLIER,
   LIVE_WITH_PARENTS_ID,
   LIVING_WITH_PARENTS_HAPPINESS_LOSS_PER_DAY,
+  LATE_WORK_GRACE_HOURS,
   LATE_WORK_PERFORMANCE_PENALTY,
   MIN_DAYS_AT_TIER_FOR_PROMOTION,
   MIN_PERFORMANCE_FOR_PROMOTION,
   OVERTIME_MULTIPLIER,
   PROMOTION_SALARY_MULTIPLIER_PER_TIER,
-  RENT_GRACE_DAYS,
+  daysSinceOverdueDay,
   SEASON_END_DAYS,
   START_YEAR,
   STUDY_HOURS_PER_DAY,
+  STUDY_HUNGER_DRAIN_MULTIPLIER,
   TUITION_PER_SEASON,
   UNIVERSITY_HOUSING_ID,
   UNIVERSITY_HOUSING_STUDENT_RENT,
   WORK_INTENSITY,
   WORKOUT_EFFECTS,
+  HEALTH_DECAY_WEEKLY_ADULT,
+  HEALTH_DECAY_WEEKLY_YOUNG_ADULT,
+  VITAL_DEPLETION_GRACE_HOURS,
 } from './constants';
 import type {
   Apartment,
@@ -50,9 +60,7 @@ import type {
 
 export type { GameState, GameStats, EngineResult } from './types';
 
-export function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+export { round2 } from '../app/lib/formatNumber';
 
 export function getYearsAlive(year: number, dayOfYear: number, birthYear: number): number {
   return year - birthYear + (dayOfYear - 1) / DAYS_PER_YEAR;
@@ -106,8 +114,6 @@ function formatTimestamp(
   return `${formatDate(year, dayOfYear)}${time} · ${lifeStage}`;
 }
 
-const liveWithParentsApartment = APARTMENTS.find((a) => a.id === LIVE_WITH_PARENTS_ID)!;
-
 function nextLogId(): number {
   return Date.now() + Math.floor(Math.random() * 10000);
 }
@@ -131,6 +137,8 @@ export function createInitialState(preset: CharacterPreset, rng: () => number = 
       money: preset.startingMoney,
       beauty: preset.beauty,
       smarts: preset.smarts,
+      fitness: preset.fitness,
+      social: preset.social,
     },
     selectedApartment: null,
     selectedJob: null,
@@ -157,6 +165,7 @@ export function createInitialState(preset: CharacterPreset, rng: () => number = 
     groceryDistrict: 'Centerlight',
     eventLog: [],
     activityCount: 0,
+    depletionHoursAccumulated: 0,
   };
 }
 
@@ -221,7 +230,7 @@ function getHoursAvailableToWork(
 
 function isLateForWork(job: Job, hour: number): boolean {
   if (job.workStartHour === 0 && job.workEndHourFull === 24) return false;
-  return hour > job.workStartHour;
+  return hour > job.workStartHour + LATE_WORK_GRACE_HOURS;
 }
 
 function canWorkOvertime(
@@ -326,7 +335,10 @@ export function advanceTime(
     energy?: number;
     hunger?: number;
     money?: number;
+    beauty?: number;
     smarts?: number;
+    fitness?: number;
+    social?: number;
   },
   resultText: string,
   hoursPassed: number,
@@ -365,6 +377,7 @@ export function advanceTime(
   const extraLogEntries: LogEntry[] = [];
 
   let healthDeltaFromDaily = 0;
+  let healthDeltaFromWeekly = 0;
 
   while (newHourOfDay >= 24) {
     if (newSelectedApartment?.id === LIVE_WITH_PARENTS_ID) {
@@ -379,12 +392,17 @@ export function advanceTime(
     }
 
     const lifeStageForDay = getLifeStage(newYear, newDayOfYear, stats.birthYear);
-    const healthDecayPerDay =
-      lifeStageForDay === 'elderly' ? 8
-      : lifeStageForDay === 'adult' ? 5
-      : lifeStageForDay === 'young adult' ? 3
-      : 0;
-    healthDeltaFromDaily -= healthDecayPerDay;
+    const justCrossedWeekStart = (newDayOfYear - 1) % 7 === 0;
+    if (lifeStageForDay === 'elderly') {
+      healthDeltaFromDaily -= 8;
+    }
+    if (justCrossedWeekStart) {
+      if (lifeStageForDay === 'adult') {
+        healthDeltaFromWeekly -= HEALTH_DECAY_WEEKLY_ADULT;
+      } else if (lifeStageForDay === 'young adult') {
+        healthDeltaFromWeekly -= HEALTH_DECAY_WEEKLY_YOUNG_ADULT;
+      }
+    }
 
     const weekEndDays = [7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112];
     const justCrossedWeekEnd =
@@ -430,7 +448,6 @@ export function advanceTime(
       });
     }
 
-    const justCrossedWeekStart = (newDayOfYear - 1) % 7 === 0;
     const currentWeekNum = Math.floor((newDayOfYear - 1) / 7);
     const joinWeekNum =
       newGymMembershipStartDay != null
@@ -452,25 +469,41 @@ export function advanceTime(
       }
     }
 
-    if (
-      newRentOverdue &&
-      newDayOfYear >= newRentOverdueSinceDay + RENT_GRACE_DAYS
-    ) {
-      newSelectedApartment = liveWithParentsApartment;
-      newRentOverdue = false;
-      newRentOverdueSinceDay = 0;
-      extraLogEntries.push({
-        id: nextLogId(),
-        text: 'You failed to pay rent and were evicted. You moved back in with your parents.',
-        timestamp: formatTimestamp(newYear, newDayOfYear, stats.birthYear, newHourOfDay),
-        effects: {},
-      });
+    if (newRentOverdue && newRentOverdueSinceDay > 0) {
+      if (newDayOfYear === newRentOverdueSinceDay + 1) {
+        extraLogEntries.push({
+          id: nextLogId(),
+          text: '📱 Rent notice: You have not paid rent for this week. Pay soon to avoid eviction.',
+          timestamp: formatTimestamp(newYear, newDayOfYear, stats.birthYear, newHourOfDay),
+          effects: {},
+        });
+      }
+      if (newDayOfYear === newRentOverdueSinceDay + 5) {
+        extraLogEntries.push({
+          id: nextLogId(),
+          text: '📱 Final warning: Pay your rent by Sunday end of day or you will be evicted with no housing.',
+          timestamp: formatTimestamp(newYear, newDayOfYear, stats.birthYear, newHourOfDay),
+          effects: {},
+        });
+      }
+      if (daysSinceOverdueDay(newDayOfYear, newRentOverdueSinceDay) >= 7) {
+        newSelectedApartment = null;
+        newRentOverdue = false;
+        newRentOverdueSinceDay = 0;
+        extraLogEntries.push({
+          id: nextLogId(),
+          text: '📱 You failed to pay rent in time and were evicted. You have no housing — visit the Housing Office to rent a place.',
+          timestamp: formatTimestamp(newYear, newDayOfYear, stats.birthYear, newHourOfDay),
+          effects: {},
+        });
+      }
     }
   }
 
   const baseHappiness =
     stats.happiness + (effect.happiness ?? 0) + happinessDeltaFromParents;
-  const baseHealth = stats.health + (effect.health ?? 0) + healthDeltaFromDaily;
+  const baseHealth =
+    stats.health + (effect.health ?? 0) + healthDeltaFromDaily + healthDeltaFromWeekly;
   let newStats: GameStats = {
     ...stats,
     year: newYear,
@@ -481,11 +514,30 @@ export function advanceTime(
     energy: round2(Math.max(0, Math.min(100, stats.energy + (effect.energy ?? 0)))),
     hunger: round2(Math.max(0, Math.min(100, stats.hunger + (effect.hunger ?? 0)))),
     money: Math.max(0, stats.money + moneyDelta),
+    beauty: round2(Math.max(0, Math.min(10, stats.beauty + (effect.beauty ?? 0)))),
     smarts: round2(Math.max(0, Math.min(10, stats.smarts + (effect.smarts ?? 0)))),
+    fitness: round2(Math.max(0, Math.min(10, stats.fitness + (effect.fitness ?? 0)))),
+    social: round2(Math.max(0, Math.min(10, stats.social + (effect.social ?? 0)))),
   };
 
-  if (newStats.hunger <= 0) {
-    newStats = { ...newStats, health: round2(Math.max(0, newStats.health - 2)) };
+  const prevAccum = state.depletionHoursAccumulated ?? 0;
+  let newAccum = prevAccum;
+  if (newStats.hunger <= 0 || newStats.energy <= 0) {
+    newAccum = prevAccum + hoursPassed;
+  } else {
+    newAccum = 0;
+  }
+  const prevOver = Math.max(0, prevAccum - VITAL_DEPLETION_GRACE_HOURS);
+  const newOver = Math.max(0, newAccum - VITAL_DEPLETION_GRACE_HOURS);
+  const deltaPenaltyHours = newOver - prevOver;
+  let healthPenaltyDepletion = 0;
+  if (newStats.hunger <= 0) healthPenaltyDepletion += 2 * deltaPenaltyHours;
+  if (newStats.energy <= 0) healthPenaltyDepletion += 2 * deltaPenaltyHours;
+  if (healthPenaltyDepletion > 0) {
+    newStats = {
+      ...newStats,
+      health: round2(Math.max(0, newStats.health - healthPenaltyDepletion)),
+    };
   }
 
   const lifeStage = getLifeStage(
@@ -512,18 +564,24 @@ export function advanceTime(
   const appliedEnergy = round2(newStats.energy - stats.energy);
   const appliedHunger = round2(newStats.hunger - stats.hunger);
   const appliedMoney = round2(newStats.money - stats.money);
+  const appliedBeauty = round2(newStats.beauty - stats.beauty);
   const appliedSmarts = round2(newStats.smarts - stats.smarts);
+  const appliedFitness = round2(newStats.fitness - stats.fitness);
+  const appliedSocial = round2(newStats.social - stats.social);
   const logEffects: LogEntry['effects'] = {};
   if (appliedHealth !== 0) logEffects.health = appliedHealth;
   if (appliedHappiness !== 0) logEffects.happiness = appliedHappiness;
   if (appliedEnergy !== 0) logEffects.energy = appliedEnergy;
   if (appliedHunger !== 0) logEffects.hunger = appliedHunger;
   if (appliedMoney !== 0) logEffects.money = appliedMoney;
+  if (appliedBeauty !== 0) logEffects.beauty = appliedBeauty;
   if (appliedSmarts !== 0) logEffects.smarts = appliedSmarts;
+  if (appliedFitness !== 0) logEffects.fitness = appliedFitness;
+  if (appliedSocial !== 0) logEffects.social = appliedSocial;
 
   const logText =
     happinessDeltaFromParents < 0
-      ? `${resultText} (Living with parents: -${Math.abs(happinessDeltaFromParents).toFixed(2)} happiness.)`
+      ? `${resultText} (Living with parents: -${fmt2(Math.abs(happinessDeltaFromParents))} happiness.)`
       : resultText;
 
   const mainLogEntry: LogEntry = {
@@ -541,6 +599,7 @@ export function advanceTime(
   const newState: GameState = {
     ...state,
     stats: newStats,
+    depletionHoursAccumulated: newAccum,
     rentOverdue: newRentOverdue,
     rentOverdueSinceDay: newRentOverdueSinceDay,
     selectedApartment: newSelectedApartment,
@@ -563,6 +622,9 @@ export function advanceTime(
 
 export function selectApartment(state: GameState, apartment: Apartment): EngineResult {
   if (state.gamePhase !== 'selecting-home') {
+    return { state, logEntries: [], gameOver: false, success: false };
+  }
+  if (state.selectedApartment?.id === apartment.id) {
     return { state, logEntries: [], gameOver: false, success: false };
   }
 
@@ -756,7 +818,7 @@ export function workShift(
   let msg = `You worked ${totalHours} hour${totalHours > 1 ? 's' : ''} as ${jobTitle} (${intensityLabel}). `;
   if (isOT) msg += '(Overtime) ';
   if (late) msg += '(Late.) ';
-  msg += `Earned $${actualPay.toFixed(2)}.`;
+  msg += `Earned $${formatMoney(actualPay)}.`;
 
   const hungerCost = -HUNGER_PER_WORK_HOUR * totalHours;
 
@@ -847,7 +909,7 @@ export function askForPromotion(
 export function passOneHour(state: GameState): EngineResult {
   return advanceTime(
     state,
-    { hunger: -HUNGER_PER_HOUR },
+    { hunger: -HUNGER_PASS_ONE_HOUR },
     '1 hour passed.',
     1
   );
@@ -944,8 +1006,8 @@ export function selectGymMembership(state: GameState, tier: GymTier): EngineResu
     stateWithGym,
     { money: -proratedCost },
     isSwitch
-      ? `Switched to ${gymName}. Prorated: $${proratedCost.toFixed(2)}.`
-      : `Joined ${gymName}. Prorated: $${proratedCost.toFixed(2)}.`,
+      ? `Switched to ${gymName}. Prorated: $${formatMoney(proratedCost)}.`
+      : `Joined ${gymName}. Prorated: $${formatMoney(proratedCost)}.`,
     0
   );
   result.state.gymMembership = tier;
@@ -965,22 +1027,28 @@ export function gymWorkout(
     return { state, logEntries: [], gameOver: false, success: false };
   }
 
+  const fitnessGain = WORKOUT_FITNESS_GAIN[intensity];
+  const beautyGlow = rollWorkoutBeautyDelta(1);
   return advanceTime(
     state,
     {
       health: healthGain,
       happiness: happinessDelta,
       energy: -energyCost,
-      hunger: -2,
+      hunger: -10,
+      fitness: fitnessGain,
+      beauty: beautyGlow,
     },
-    `You worked out at the gym (${intensity}).`,
+    beautyGlow > 0
+      ? `You worked out at the gym (${intensity}). Post-workout glow: beauty +${fmt2(beautyGlow)}.`
+      : `You worked out at the gym (${intensity}).`,
     1
   );
 }
 
 export function parkWalk(state: GameState): EngineResult {
-  const energyCost = 1;
-  const healthGain = 0.3;
+  const energyCost = 10;
+  const healthGain = 1;
   if (state.stats.energy < energyCost) {
     return { state, logEntries: [], gameOver: false, success: false };
   }
@@ -988,18 +1056,23 @@ export function parkWalk(state: GameState): EngineResult {
   const weather = getWeatherForDay(state.stats.year, state.stats.dayOfYear);
   const happinessBonus = isGoodWeatherForWalk(weather.quality) ? 1 : 0;
 
+  const walkBeauty = rollWorkoutBeautyDelta(1);
   const effects: {
     health?: number;
     happiness?: number;
     energy?: number;
     hunger?: number;
-  } = { health: healthGain, energy: -energyCost, hunger: -1 };
+    social?: number;
+    beauty?: number;
+  } = { health: healthGain, energy: -energyCost, hunger: -5, social: PARK_WALK_SOCIAL_GAIN };
   if (happinessBonus > 0) effects.happiness = happinessBonus;
+  if (walkBeauty > 0) effects.beauty = walkBeauty;
 
-  const msg =
+  let msg =
     happinessBonus > 0
-      ? 'You took a walk in the park. Nice weather! Health +0.30, Happiness +1.'
-      : 'You took a walk in the park. Health +0.30.';
+      ? 'You took a walk in the park. Nice weather! Health +1, Happiness +1. Energy −10, Hunger −5.'
+      : 'You took a walk in the park. Health +1. Energy −10, Hunger −5.';
+  if (walkBeauty > 0) msg += ` Fresh-air glow: beauty +${fmt2(walkBeauty)}.`;
 
   return advanceTime(state, effects, msg, 1);
 }
@@ -1153,7 +1226,7 @@ export function study(
     health: baseEffects.health * scale,
     happiness: baseEffects.happiness * scale,
     energy: baseEffects.energy * scale,
-    hunger: baseEffects.hunger * scale,
+    hunger: baseEffects.hunger * scale * STUDY_HUNGER_DRAIN_MULTIPLIER,
     smarts: 0, // computed below
   };
 

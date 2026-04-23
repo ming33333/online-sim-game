@@ -22,6 +22,8 @@ export interface GameStats {
   money: number;
   beauty: number;
   smarts: number;
+  fitness: number;
+  social: number;
 }
 
 export interface LogEntry {
@@ -34,7 +36,10 @@ export interface LogEntry {
     energy?: number;
     hunger?: number;
     money?: number;
+    beauty?: number;
     smarts?: number;
+    fitness?: number;
+    social?: number;
   };
 }
 
@@ -46,7 +51,8 @@ export type GamePhase =
   | 'home'
   | 'gym'
   | 'park'
-  | 'grocery';
+  | 'grocery'
+  | 'furniture';
 
 export type DistrictName = 'Dewmist' | 'Semba' | 'Centerlight' | 'Ellum' | 'Marina';
 
@@ -76,6 +82,8 @@ export interface Job {
   workEndHourFull: number;
   workEndHourPart?: number;
   allowsPartTime?: boolean;
+  /** District where this job’s workplace is (travel / map). */
+  district: DistrictName;
   effect: { health?: number; happiness?: number };
   requiredDegree?: Degree;
   promotionTiers: string[];
@@ -96,6 +104,8 @@ export interface CharacterPreset {
   startingMoney: number;
   beauty: number;
   smarts: number;
+  fitness: number;
+  social: number;
 }
 
 export interface GroceryOption {
@@ -134,6 +144,8 @@ export interface GameState {
   groceryDistrict: DistrictName | null;
   eventLog: LogEntry[];
   activityCount: number;
+  /** Cumulative in-game hours in current hunger/energy depletion streak (engine / simulator). */
+  depletionHoursAccumulated: number;
 }
 
 export interface EngineResult {

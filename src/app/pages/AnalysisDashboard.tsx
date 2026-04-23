@@ -20,6 +20,7 @@ import { TrendingUp, DollarSign, Package, Activity, Download } from 'lucide-reac
 import { runSimulation, buildLogContent, parseLogContent } from '../../simulator';
 import type { SimRunResult } from '../../simulator';
 import type { CharacterPresetId } from '../../simulator';
+import { round2 } from '../lib/formatNumber';
 
 const CHARACTER_PRESETS: { id: CharacterPresetId; label: string }[] = [
   { id: 'privileged', label: 'Privileged' },
@@ -32,8 +33,6 @@ const CHART_COLORS: Record<CharacterPresetId, string> = {
   middle: '#2563eb',
   struggling: '#dc2626',
 };
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function AnalysisDashboard() {
   const [runs, setRuns] = useState<SimRunResult[]>([]);
@@ -87,7 +86,16 @@ export function AnalysisDashboard() {
             actionType: t.action?.type ?? 'unknown',
           }));
         const run: SimRunResult = {
-          characterPreset: { id: metadata.characterPresetId, name: metadata.characterPresetId, description: '', startingMoney: 0, beauty: 5, smarts: 5 },
+          characterPreset: {
+            id: metadata.characterPresetId,
+            name: metadata.characterPresetId,
+            description: '',
+            startingMoney: 0,
+            beauty: 5,
+            smarts: 5,
+            fitness: 5,
+            social: 5,
+          },
           characterPresetId: metadata.characterPresetId as CharacterPresetId,
           ticks,
           finalState: {} as SimRunResult['finalState'],
@@ -109,6 +117,9 @@ export function AnalysisDashboard() {
               hunger: t.stateAfter.hunger,
               money: t.stateAfter.money,
               smarts: t.stateAfter.smarts,
+              beauty: t.stateAfter.beauty ?? 5,
+              fitness: t.stateAfter.fitness ?? 5,
+              social: t.stateAfter.social ?? 5,
             });
           }
         }

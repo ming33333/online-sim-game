@@ -1,0 +1,10 @@
+/* Retro pixel UI — used by intro menu (LifeSimGame). */
+.font-pixel-title {
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-weight: 400;
+}
+
+.font-pixel-ui {
+  font-family: 'VT323', ui-monospace, monospace;
+  font-weight: 400;
+}
