@@ -35,7 +35,7 @@ export function getCharacterPortraitUrl(
 export const CHARACTER_PORTRAIT_URLS: Record<PortraitPresetId, string> = {
   privileged: getCharacterPortraitUrl('privileged', 'boy'),
   middle: getCharacterPortraitUrl('middle', 'girl'),
-  struggling: getCharacterPortraitUrl('struggling', 'boy', 'south-east'),
+  struggling: getCharacterPortraitUrl('struggling', 'boy', 'south'),
 };
 
 function isPresetId(id: string | null | undefined): id is PortraitPresetId {
@@ -64,9 +64,8 @@ export function CharacterPortrait({
   const resolved = isPresetId(presetId) ? presetId : null;
   const isIntro = variant === 'intro';
 
-  const thumbRotation: 'south' | 'south-east' =
-    resolved === 'struggling' ? 'south-east' : 'south';
-  const src = resolved ? getCharacterPortraitUrl(resolved, gender, thumbRotation) : null;
+  const rotation: 'south' | 'south-east' = 'south';
+  const src = resolved ? getCharacterPortraitUrl(resolved, gender, rotation) : null;
 
   const alt =
     resolved && name
@@ -80,7 +79,7 @@ export function CharacterPortrait({
       <div
         className={`relative rounded-2xl overflow-hidden flex items-center justify-center w-full ${
           resolved ? BG[resolved] : 'bg-gradient-to-b from-gray-100 to-gray-200 ring-2 ring-dashed ring-gray-300'
-        } ${isIntro ? 'min-h-[280px] max-h-[360px] py-4' : 'min-h-[140px] max-h-[220px] py-2'}`}
+        } ${isIntro ? 'min-h-[336px] max-h-[432px] py-4' : 'min-h-[140px] max-h-[220px] py-2'}`}
       >
         {src ? (
           <img
@@ -89,7 +88,7 @@ export function CharacterPortrait({
             loading={isIntro ? 'eager' : 'lazy'}
             decoding="async"
             className={`w-full select-none object-contain object-center [image-rendering:pixelated] ${
-              isIntro ? 'max-h-[340px] rounded-xl shadow-sm' : 'max-h-[200px] rounded-lg shadow-sm'
+              isIntro ? 'max-h-[408px] rounded-xl shadow-sm' : 'max-h-[200px] rounded-lg shadow-sm'
             }`}
           />
         ) : (
@@ -103,12 +102,6 @@ export function CharacterPortrait({
           </div>
         )}
       </div>
-      {(name || subtitle) && (
-        <div className="text-center w-full px-1">
-          {name ? <p className={`font-semibold text-gray-900 ${isIntro ? 'text-lg' : 'text-sm'}`}>{name}</p> : null}
-          {subtitle ? <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p> : null}
-        </div>
-      )}
     </div>
   );
 }
