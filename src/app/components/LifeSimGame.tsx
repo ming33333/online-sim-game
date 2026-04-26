@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -947,8 +947,12 @@ export function LifeSimGame() {
   const [introRevealStarted, setIntroRevealStarted] = useState(false);
   /** After first Play on the black screen, the welcome message types out (`useStoryBeatTyping`). */
   const [introWelcomeLineStarted, setIntroWelcomeLineStarted] = useState(false);
-  /** Bumps when `stage` becomes `intro` so welcome typing resets (same rules as story-beat hook). */
+  /** Bumps when the welcome line starts (fresh `useStoryBeatTyping` session — like a new school dialogue beat). */
   const [introWelcomeBeatKey, setIntroWelcomeBeatKey] = useState(0);
+  const beginIntroWelcomeLineTyping = useCallback(() => {
+    setIntroWelcomeBeatKey((k) => k + 1);
+    setIntroWelcomeLineStarted(true);
+  }, []);
   const [nameMaxHintFirst, setNameMaxHintFirst] = useState(false);
   const [nameMaxHintLast, setNameMaxHintLast] = useState(false);
   const [selectedApartment, setSelectedApartment] = useState<Apartment | null>(null);
@@ -1271,7 +1275,6 @@ export function LifeSimGame() {
       setIntroRevealStarted(false);
       setIntroWelcomeLineStarted(false);
       introStartExitLockRef.current = false;
-      setIntroWelcomeBeatKey((k) => k + 1);
       setNameMaxHintFirst(false);
       setNameMaxHintLast(false);
     }
@@ -3620,10 +3623,6 @@ export function LifeSimGame() {
       introWelcomeTyping.skipTyping();
     };
 
-    const handleIntroBeginWelcomeTyping = () => {
-      setIntroWelcomeLineStarted(true);
-    };
-
     const handleIntroEnterMenu = async () => {
       introWelcomeTyping.skipTyping();
       await unlockMenuAudio();
@@ -3937,7 +3936,7 @@ export function LifeSimGame() {
                     className="h-16 min-w-[12rem] rounded-none border-[3px] border-[#1a2332] font-pixel-title text-xs sm:text-sm text-white shadow-[6px_6px_0_0_rgba(15,23,42,0.65)] bg-gradient-to-r from-slate-600 via-sky-600 to-cyan-500 hover:from-slate-700 hover:via-sky-700 hover:to-cyan-600 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[4px_4px_0_0_rgba(15,23,42,0.55)]"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleIntroBeginWelcomeTyping();
+                      beginIntroWelcomeLineTyping();
                     }}
                   >
                     <CirclePlay className="size-6 mr-2 shrink-0" aria-hidden />

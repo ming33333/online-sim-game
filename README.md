@@ -10,11 +10,10 @@
 
 # online-sim-game
 
+# TODO
 
-
-# TODO 
-
-1. college better
-2. apartment gain items
-3. pixel art
+1. less words on game
+2. some aesthetics
+3. more home object
+4. bank stuff, like CDs and index funds
 

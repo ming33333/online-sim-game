@@ -39,8 +39,8 @@ export const PROMOTION_SALARY_MULTIPLIER_PER_TIER = 0.15;
 export const MIN_PERFORMANCE_FOR_PROMOTION = 80;
 export const MIN_DAYS_AT_TIER_FOR_PROMOTION = 28;
 
-/** Study sessions drain this × the base hunger cost (2 = twice as much hunger lost per study block). */
-export const STUDY_HUNGER_DRAIN_MULTIPLIER = 2;
+/** Study sessions drain this × the base hunger cost (4 = 2× harsher than the previous 2× setting). */
+export const STUDY_HUNGER_DRAIN_MULTIPLIER = 4;
 
 /** Hunger lost when passing one hour (idle time) */
 export const HUNGER_PASS_ONE_HOUR = 10;

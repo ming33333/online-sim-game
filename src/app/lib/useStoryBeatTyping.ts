@@ -23,9 +23,15 @@ export function useStoryBeatTyping(
   const [revealAll, setRevealAll] = useState(false);
   /** Tracks last len we played a click for — sound runs after paint so it lines up with the glyph. */
   const prevTypedLenSoundRef = useRef(0);
+  /** Pending timer id for the next character reveal (so skip/reset can cancel immediately). */
+  const typingTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     prevTypedLenSoundRef.current = 0;
+    if (typingTimerRef.current != null) {
+      window.clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
     setTypedLen(0);
     setRevealAll(false);
   }, [beatKey]);
@@ -45,7 +51,11 @@ export function useStoryBeatTyping(
         return Math.min(l + 1, n);
       });
     }, charDelayMs + pauseAfterPrev);
-    return () => window.clearTimeout(id);
+    typingTimerRef.current = id;
+    return () => {
+      window.clearTimeout(id);
+      if (typingTimerRef.current === id) typingTimerRef.current = null;
+    };
   }, [safeText, typedLen, revealAll, charDelayMs, sentencePauseMs, enabled]);
 
   useEffect(() => {
@@ -66,8 +76,13 @@ export function useStoryBeatTyping(
   }, [typedLen, revealAll, safeText]);
 
   const skipTyping = useCallback(() => {
+    if (typingTimerRef.current != null) {
+      window.clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
     setRevealAll(true);
     setTypedLen(safeText.length);
+    prevTypedLenSoundRef.current = safeText.length;
   }, [safeText.length]);
 
   const typingDone = revealAll || typedLen >= safeText.length;
