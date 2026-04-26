@@ -70,6 +70,7 @@ import type { GymTier } from './GymView';
 import { ParkView } from './ParkView';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Input } from './ui/input';
+import { Slider } from './ui/slider';
 import {
   Dialog,
   DialogContent,
@@ -79,6 +80,8 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { cn } from './ui/utils';
+import { IntroMenu } from './IntroMenu';
+import { StatScaleTooltip } from './StatScaleTooltip';
 import { useStoryBeatTyping, storyBeatDialogContentClassName } from '../lib/useStoryBeatTyping';
 import {
   getDailyState,
@@ -939,7 +942,66 @@ export function LifeSimGame() {
     [characterFirstName, characterLastName]
   );
   const [characterGender, setCharacterGender] = useState<CharacterGender>('girl');
-  const [selectedCharacter, setSelectedCharacter] = useState<CharacterPreset | null>(null);
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterPreset | null>(
+    CHARACTER_PRESETS.find((p) => p.id === 'middle') ?? null
+  );
+  const getDefaultIntroAlloc = useCallback((budget: number) => {
+    const b = Math.max(0, Math.min(40, Math.floor(budget)));
+    const base = Math.min(10, Math.floor(b / 4));
+    let rem = Math.max(0, b - base * 4);
+
+    const alloc = {
+      beauty: base,
+      smarts: base,
+      fitness: base,
+      social: base,
+    };
+
+    // Distribute remainder (still respecting max 10)
+    const keys: Array<keyof typeof alloc> = ['beauty', 'smarts', 'fitness', 'social'];
+    for (let i = 0; i < keys.length && rem > 0; i++) {
+      const k = keys[i];
+      const add = Math.min(10 - alloc[k], rem);
+      alloc[k] += add;
+      rem -= add;
+    }
+
+    return alloc;
+  }, []);
+  const introPointBudget = useMemo(() => {
+    const id = selectedCharacter?.id;
+    if (id === 'struggling') return 10;
+    if (id === 'middle') return 16;
+    if (id === 'privileged') return 24;
+    return 20;
+  }, [selectedCharacter?.id]);
+  const [introStatAlloc, setIntroStatAlloc] = useState<{
+    beauty: number;
+    smarts: number;
+    fitness: number;
+    social: number;
+  }>(() => {
+    return getDefaultIntroAlloc(15);
+  });
+  useEffect(() => {
+    if (!selectedCharacter) return;
+    setIntroStatAlloc(getDefaultIntroAlloc(introPointBudget));
+  }, [getDefaultIntroAlloc, introPointBudget, selectedCharacter]);
+  const introPointsUsed = introStatAlloc.beauty + introStatAlloc.smarts + introStatAlloc.fitness + introStatAlloc.social;
+  const introPointsRemaining = Math.max(0, introPointBudget - introPointsUsed);
+  const setIntroAllocStat = useCallback(
+    (key: 'beauty' | 'smarts' | 'fitness' | 'social', nextRaw: number) => {
+      setIntroStatAlloc((prev) => {
+        const nextClamped = Math.max(0, Math.min(10, Math.round(nextRaw)));
+        const current = prev[key];
+        const usedWithoutCurrent = introPointsUsed - current;
+        const maxAllowed = Math.min(10, introPointBudget - usedWithoutCurrent);
+        const next = Math.min(nextClamped, maxAllowed);
+        return { ...prev, [key]: next };
+      });
+    },
+    [introPointBudget, introPointsUsed]
+  );
   /** Intro menu mount for enter/exit animations before `startGame` switches stage. */
   const [introMenuVisible, setIntroMenuVisible] = useState(true);
   const introStartExitLockRef = useRef(false);
@@ -1222,10 +1284,10 @@ export function LifeSimGame() {
       energy: 100,
       hunger: 100,
       money: selectedCharacter.startingMoney,
-      beauty: selectedCharacter.beauty,
-      smarts: selectedCharacter.smarts,
-      fitness: selectedCharacter.fitness,
-      social: selectedCharacter.social,
+      beauty: introStatAlloc.beauty,
+      smarts: introStatAlloc.smarts,
+      fitness: introStatAlloc.fitness,
+      social: introStatAlloc.social,
     });
     setActivityCount(0);
     setEventLog([]);
@@ -3703,35 +3765,30 @@ export function LifeSimGame() {
           <Card className="max-w-4xl w-full rounded-none border-4 border-[#1a2332] bg-[#d8e0eb] text-slate-900 shadow-[8px_8px_0_0_rgba(15,23,42,0.88)] font-pixel-ui text-xl leading-snug">
             <CardHeader className="text-center border-b-4 border-[#1a2332] bg-[linear-gradient(180deg,#b9c6d8_0%,#a8b6cc_100%)] px-4 py-5 sm:px-6">
               <div className="flex justify-center mb-3" aria-hidden>
-                <span className="font-pixel-title text-2xl sm:text-3xl text-sky-300 drop-shadow-[1px_1px_0_#0f172a] leading-none select-none">
-                  ★
+                <span className="font-pixel-title text-2xl ">
+                  
                 </span>
               </div>
-              <CardTitle className="font-pixel-title text-sm sm:text-base text-slate-900 leading-relaxed">
-                Life Simulator
+              <CardTitle className="font-pixel-title text-slate-900 flex items-center justify-center gap-3">
+                <span>Choose your starting life path</span>
               </CardTitle>
-              <CardDescription className="font-pixel-ui text-slate-700 text-lg sm:text-xl mt-3 leading-snug">
-                {selectedCharacter
-                  ? 'Name your sim and start your journey in Werdred.'
-                  : 'After Play, pick a life path below — then name your sim and begin.'}
-              </CardDescription>
             </CardHeader>
             <CardContent
-              className={`gap-6 items-start pb-6 ${selectedCharacter ? 'grid md:grid-cols-2' : ''}`}
+              className={`gap-6 pb-6 ${
+                selectedCharacter
+                  ? 'grid md:grid-cols-[1fr_1.25fr] items-stretch'
+                  : 'items-start'
+              }`}
             >
-              <div className="space-y-4 min-w-0 w-full max-w-xl mx-auto md:max-w-none">
-                <div className="space-y-3">
-                  <p className="font-pixel-title text-[0.65rem] sm:text-xs text-slate-800 uppercase tracking-wide">
-                    Choose your starting life path
-                  </p>
+              <div className="space-y-4 min-w-0 w-full max-w-xl mx-auto md:max-w-none flex flex-col h-full">
+                <div className="flex flex-col flex-1 min-h-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-slate-700">Gender:</span>
                     <div className="inline-flex rounded-none border-[3px] border-[#1a2332] bg-[#eef2f8] p-0 shadow-[3px_3px_0_0_rgba(30,41,59,0.65)]">
                       <Button
                         type="button"
                         variant={characterGender === 'girl' ? 'default' : 'ghost'}
                         size="sm"
-                        className={`h-8 px-3 text-lg rounded-none border-0 font-pixel-ui ${
+                        className={`h-10 px-4 text-xl rounded-none border-0 font-pixel-ui ${
                           characterGender === 'girl' ? '' : 'text-slate-800 hover:bg-slate-300/70'
                         }`}
                         onClick={() => setCharacterGender('girl')}
@@ -3742,7 +3799,7 @@ export function LifeSimGame() {
                         type="button"
                         variant={characterGender === 'boy' ? 'default' : 'ghost'}
                         size="sm"
-                        className={`h-8 px-3 text-lg rounded-none border-0 border-l-[3px] border-[#1a2332] font-pixel-ui ${
+                        className={`h-10 px-4 text-xl rounded-none border-0 border-l-[3px] border-[#1a2332] font-pixel-ui ${
                           characterGender === 'boy' ? '' : 'text-slate-800 hover:bg-slate-300/70'
                         }`}
                         onClick={() => setCharacterGender('boy')}
@@ -3751,137 +3808,133 @@ export function LifeSimGame() {
                       </Button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    {CHARACTER_PRESETS.map((preset) => {
-                      const thumb =
-                        preset.id === 'privileged' || preset.id === 'middle' || preset.id === 'struggling'
-                          ? getCharacterPortraitUrl(
-                              preset.id as PortraitPresetId,
-                              characterGender,
-                              preset.id === 'struggling' ? 'south-east' : 'south'
-                            )
-                          : null;
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => setSelectedCharacter(preset)}
-                          className={`flex gap-3 items-start text-left rounded-none border-[3px] p-3 text-lg transition-[transform,box-shadow] active:translate-x-0.5 active:translate-y-0.5 ${
-                            selectedCharacter?.id === preset.id
-                              ? 'border-sky-800 bg-sky-100/95 shadow-[4px_4px_0_0_#075985] ring-0'
-                              : 'border-[#1a2332] bg-[#eef2f8] shadow-[4px_4px_0_0_rgba(30,41,59,0.6)] hover:bg-slate-50'
-                          }`}
-                        >
-                          {thumb ? (
-                            <img
-                              src={thumb}
-                              alt=""
-                              width={80}
-                              height={80}
-                              loading="lazy"
-                              decoding="async"
-                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-none object-contain object-center flex-shrink-0 border-2 border-slate-500/60 shadow-none [image-rendering:pixelated]"
-                              aria-hidden
-                            />
-                          ) : null}
-                          <div className="min-w-0 flex-1">
-                            <div className="font-pixel-title text-[0.65rem] sm:text-xs mb-1 text-slate-900">
-                              {preset.name}
-                            </div>
-                            <div className="text-slate-700 text-base mb-1">{preset.description}</div>
-                            <div className="text-slate-800 text-base space-y-1">
-                              <div>Money: ${preset.startingMoney.toLocaleString()}</div>
-                              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[0.95rem] sm:text-base leading-snug">
-                                <div>Beauty: {fmtStatOutOfTen(preset.beauty)}</div>
-                                <div>Smarts: {fmtStatOutOfTen(preset.smarts)}</div>
-                                <div>Fitness: {fmtStatOutOfTen(preset.fitness)}</div>
-                                <div>Social: {fmtStatOutOfTen(preset.social)}</div>
+                  <div className="mt-2 h-[3px] w-full bg-slate-400/70" aria-hidden />
+                  <div className="flex-1 min-h-0 flex flex-col justify-center">
+                    <div className="grid grid-cols-1 gap-6">
+                      {CHARACTER_PRESETS.map((preset) => {
+                        const thumb =
+                          preset.id === 'privileged' || preset.id === 'middle' || preset.id === 'struggling'
+                            ? getCharacterPortraitUrl(
+                                preset.id as PortraitPresetId,
+                                characterGender,
+                                'south'
+                              )
+                            : null;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => setSelectedCharacter(preset)}
+                            className={`flex gap-3 items-start text-left rounded-none border-[3px] px-3 py-3 text-lg transition-[transform,box-shadow] active:translate-x-0.5 active:translate-y-0.5 ${
+                              selectedCharacter?.id === preset.id
+                                ? 'border-sky-800 bg-sky-100/95 shadow-[4px_4px_0_0_#075985] ring-0'
+                                : 'border-[#1a2332] bg-[#eef2f8] shadow-[4px_4px_0_0_rgba(30,41,59,0.6)] hover:bg-slate-50'
+                            }`}
+                          >
+                            {thumb ? (
+                              <img
+                                src={thumb}
+                                alt=""
+                                width={80}
+                                height={80}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-none object-contain object-center flex-shrink-0 border-2 border-slate-500/60 shadow-none [image-rendering:pixelated]"
+                                aria-hidden
+                              />
+                            ) : null}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-pixel-title text-[0.65rem] sm:text-xs mb-1 text-slate-900">
+                                {preset.name}
                               </div>
+                              <div className="text-slate-700 text-base">{preset.description}</div>
                             </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
                 {selectedCharacter && (
-                  <motion.div
-                    className="space-y-4 pt-3 border-t-[3px] border-slate-400"
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, ease: 'easeOut' }}
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label
-                          htmlFor="first-name"
-                          className="font-pixel-title text-[0.65rem] sm:text-xs mb-2 block text-slate-900 uppercase tracking-wide"
-                        >
-                          First name
-                        </label>
-                        <input
-                          id="first-name"
-                          type="text"
-                          value={characterFirstName}
-                          maxLength={CHARACTER_NAME_MAX}
-                          onChange={(e) => {
-                            const v = e.target.value.slice(0, CHARACTER_NAME_MAX);
-                            setCharacterFirstName(v);
-                            if (v.length < CHARACTER_NAME_MAX) setNameMaxHintFirst(false);
-                          }}
-                          onKeyDown={(e) => {
-                            if (nameKeyExtendsPastMax(e, characterFirstName.length)) setNameMaxHintFirst(true);
-                          }}
-                          placeholder="First name"
-                          autoComplete="given-name"
-                          className="w-full px-3 py-2 rounded-none border-[3px] border-[#1a2332] bg-[#f4f7fc] font-pixel-ui text-xl sm:text-2xl focus:outline-none focus:ring-0 focus:border-sky-600 placeholder:text-slate-400"
-                        />
-                        {nameMaxHintFirst && (
-                          <p className="text-[10px] text-amber-700 mt-1 font-pixel-ui motion-safe:animate-pulse">
-                            Max {CHARACTER_NAME_MAX} characters
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="last-name"
-                          className="font-pixel-title text-[0.65rem] sm:text-xs mb-2 block text-slate-900 uppercase tracking-wide"
-                        >
-                          Last name
-                        </label>
-                        <input
-                          id="last-name"
-                          type="text"
-                          value={characterLastName}
-                          maxLength={CHARACTER_NAME_MAX}
-                          onChange={(e) => {
-                            const v = e.target.value.slice(0, CHARACTER_NAME_MAX);
-                            setCharacterLastName(v);
-                            if (v.length < CHARACTER_NAME_MAX) setNameMaxHintLast(false);
-                          }}
-                          onKeyDown={(e) => {
-                            if (nameKeyExtendsPastMax(e, characterLastName.length)) setNameMaxHintLast(true);
-                          }}
-                          placeholder="Last name"
-                          autoComplete="family-name"
-                          className="w-full px-3 py-2 rounded-none border-[3px] border-[#1a2332] bg-[#f4f7fc] font-pixel-ui text-xl sm:text-2xl focus:outline-none focus:ring-0 focus:border-sky-600 placeholder:text-slate-400"
-                        />
-                        {nameMaxHintLast && (
-                          <p className="text-[10px] text-amber-700 mt-1 font-pixel-ui motion-safe:animate-pulse">
-                            Max {CHARACTER_NAME_MAX} characters
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      onClick={handleIntroStartRequest}
-                      disabled={!characterFirstName.trim() || !characterLastName.trim()}
-                      className="w-full rounded-none border-[3px] border-[#1a2332] bg-gradient-to-r from-slate-700 via-sky-700 to-cyan-600 hover:from-slate-800 hover:via-sky-800 hover:to-cyan-700 font-pixel-title text-[0.65rem] sm:text-xs py-6 text-white shadow-[5px_5px_0_0_#0f172a] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[3px_3px_0_0_#0f172a] disabled:opacity-50"
-                      size="lg"
+                  <div className="mt-auto">
+                    <motion.div
+                      className="mt-2 space-y-4 pt-3 border-t-[3px] border-slate-400"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, ease: 'easeOut' }}
                     >
-                      Start Your Life Journey
-                    </Button>
-                  </motion.div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label
+                            htmlFor="first-name"
+                            className="font-pixel-title text-[0.65rem] sm:text-xs mb-2 block text-slate-900 uppercase tracking-wide"
+                          >
+                            First name
+                          </label>
+                          <input
+                            id="first-name"
+                            type="text"
+                            value={characterFirstName}
+                            maxLength={CHARACTER_NAME_MAX}
+                            onChange={(e) => {
+                              const v = e.target.value.slice(0, CHARACTER_NAME_MAX);
+                              setCharacterFirstName(v);
+                              if (v.length < CHARACTER_NAME_MAX) setNameMaxHintFirst(false);
+                            }}
+                            onKeyDown={(e) => {
+                              if (nameKeyExtendsPastMax(e, characterFirstName.length)) setNameMaxHintFirst(true);
+                            }}
+                            placeholder="First name"
+                            autoComplete="given-name"
+                            className="w-full px-3 py-2 rounded-none border-[3px] border-[#1a2332] bg-[#f4f7fc] font-pixel-ui text-xl sm:text-2xl focus:outline-none focus:ring-0 focus:border-sky-600 placeholder:text-slate-400"
+                          />
+                          {nameMaxHintFirst && (
+                            <p className="text-[10px] text-amber-700 mt-1 font-pixel-ui motion-safe:animate-pulse">
+                              Max {CHARACTER_NAME_MAX} characters
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="last-name"
+                            className="font-pixel-title text-[0.65rem] sm:text-xs mb-2 block text-slate-900 uppercase tracking-wide"
+                          >
+                            Last name
+                          </label>
+                          <input
+                            id="last-name"
+                            type="text"
+                            value={characterLastName}
+                            maxLength={CHARACTER_NAME_MAX}
+                            onChange={(e) => {
+                              const v = e.target.value.slice(0, CHARACTER_NAME_MAX);
+                              setCharacterLastName(v);
+                              if (v.length < CHARACTER_NAME_MAX) setNameMaxHintLast(false);
+                            }}
+                            onKeyDown={(e) => {
+                              if (nameKeyExtendsPastMax(e, characterLastName.length)) setNameMaxHintLast(true);
+                            }}
+                            placeholder="Last name"
+                            autoComplete="family-name"
+                            className="w-full px-3 py-2 rounded-none border-[3px] border-[#1a2332] bg-[#f4f7fc] font-pixel-ui text-xl sm:text-2xl focus:outline-none focus:ring-0 focus:border-sky-600 placeholder:text-slate-400"
+                          />
+                          {nameMaxHintLast && (
+                            <p className="text-[10px] text-amber-700 mt-1 font-pixel-ui motion-safe:animate-pulse">
+                              Max {CHARACTER_NAME_MAX} characters
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleIntroStartRequest}
+                        disabled={!characterFirstName.trim() || !characterLastName.trim()}
+                        className="w-full rounded-none border-[3px] border-[#1a2332] bg-gradient-to-r from-slate-700 via-sky-700 to-cyan-600 hover:from-slate-800 hover:via-sky-800 hover:to-cyan-700 font-pixel-title text-[0.65rem] sm:text-xs py-6 text-white shadow-[5px_5px_0_0_#0f172a] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[3px_3px_0_0_#0f172a] disabled:opacity-50"
+                        size="lg"
+                      >
+                        Start Your Life Journey
+                      </Button>
+                    </motion.div>
+                  </div>
                 )}
               </div>
               {selectedCharacter && (
@@ -3901,6 +3954,89 @@ export function LifeSimGame() {
                     name={characterDisplayName || 'Your sim'}
                     subtitle={selectedCharacter?.name ?? undefined}
                   />
+                  <div className="mt-3 border-t-2 border-slate-700/30 pt-3 text-slate-900">
+                    <div className="font-pixel-title text-[0.6rem] sm:text-[0.7rem] uppercase tracking-wide text-slate-900 mb-2 text-center">
+                      Starting stats
+                    </div>
+                    <div className="text-[0.95rem] sm:text-base space-y-2">
+                      <div className="text-center text-slate-800">
+                        Points: <span className="font-semibold tabular-nums">{introPointsRemaining}</span> /{' '}
+                        <span className="font-semibold tabular-nums">{introPointBudget}</span> remaining
+                      </div>
+                      <div className="text-center">
+                        Money: ${selectedCharacter.startingMoney.toLocaleString()}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <div className="space-y-1">
+                          <StatScaleTooltip stat="beauty" side="bottom">
+                            <div className="flex items-center justify-between gap-2 cursor-help text-slate-900">
+                              <span className="font-medium">Beauty</span>
+                              <span className="font-semibold tabular-nums">{fmtStatOutOfTen(introStatAlloc.beauty)}</span>
+                            </div>
+                          </StatScaleTooltip>
+                          <Slider
+                            value={[introStatAlloc.beauty]}
+                            min={0}
+                            max={10}
+                            step={1}
+                            onValueChange={(v) => setIntroAllocStat('beauty', v[0] ?? 0)}
+                            className="!h-5 [&_[data-slot=slider-track]]:!h-3 [&_[data-slot=slider-range]]:!bg-rose-500 [&_[data-slot=slider-thumb]]:!size-5 [&_[data-slot=slider-thumb]]:!border-rose-600"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <StatScaleTooltip stat="smarts" side="bottom">
+                            <div className="flex items-center justify-between gap-2 cursor-help text-slate-900">
+                              <span className="font-medium">Smarts</span>
+                              <span className="font-semibold tabular-nums">{fmtStatOutOfTen(introStatAlloc.smarts)}</span>
+                            </div>
+                          </StatScaleTooltip>
+                          <Slider
+                            value={[introStatAlloc.smarts]}
+                            min={0}
+                            max={10}
+                            step={1}
+                            onValueChange={(v) => setIntroAllocStat('smarts', v[0] ?? 0)}
+                            className="!h-5 [&_[data-slot=slider-track]]:!h-3 [&_[data-slot=slider-range]]:!bg-indigo-500 [&_[data-slot=slider-thumb]]:!size-5 [&_[data-slot=slider-thumb]]:!border-indigo-600"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <StatScaleTooltip stat="fitness" side="bottom">
+                            <div className="flex items-center justify-between gap-2 cursor-help text-slate-900">
+                              <span className="font-medium">Fitness</span>
+                              <span className="font-semibold tabular-nums">{fmtStatOutOfTen(introStatAlloc.fitness)}</span>
+                            </div>
+                          </StatScaleTooltip>
+                          <Slider
+                            value={[introStatAlloc.fitness]}
+                            min={0}
+                            max={10}
+                            step={1}
+                            onValueChange={(v) => setIntroAllocStat('fitness', v[0] ?? 0)}
+                            className="!h-5 [&_[data-slot=slider-track]]:!h-3 [&_[data-slot=slider-range]]:!bg-emerald-500 [&_[data-slot=slider-thumb]]:!size-5 [&_[data-slot=slider-thumb]]:!border-emerald-600"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <StatScaleTooltip stat="social" side="bottom">
+                            <div className="flex items-center justify-between gap-2 cursor-help text-slate-900">
+                              <span className="font-medium">Social</span>
+                              <span className="font-semibold tabular-nums">{fmtStatOutOfTen(introStatAlloc.social)}</span>
+                            </div>
+                          </StatScaleTooltip>
+                          <Slider
+                            value={[introStatAlloc.social]}
+                            min={0}
+                            max={10}
+                            step={1}
+                            onValueChange={(v) => setIntroAllocStat('social', v[0] ?? 0)}
+                            className="!h-5 [&_[data-slot=slider-track]]:!h-3 [&_[data-slot=slider-range]]:!bg-sky-500 [&_[data-slot=slider-thumb]]:!size-5 [&_[data-slot=slider-thumb]]:!border-sky-600"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </CardContent>
@@ -4083,30 +4219,29 @@ export function LifeSimGame() {
           </motion.div>
         )}
       </AnimatePresence>
-      {stage === 'playing' &&
-        devCheatsPortalTarget &&
-        createPortal(
-          <Card className="flex-shrink-0 border-amber-200 bg-amber-50/50 shadow-md">
-            <CardHeader
-              className="flex flex-row items-center justify-between py-1.5 px-3 cursor-pointer"
-              onClick={() => {
-                setDevCheatsOpen((o) => !o);
-                if (!devCheatsOpen) loadDevFormFromStats();
-              }}
-            >
-              <CardTitle className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
-                <Wrench className="size-3.5" />
-                Developer cheats
-              </CardTitle>
-              <span className="text-[10px] text-amber-600">{devCheatsOpen ? '▼' : '▶'}</span>
-            </CardHeader>
-            {devCheatsOpen && (
-              <CardContent className="pt-0 px-3 pb-3 space-y-2">
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
-                  <label className="flex items-center gap-1">
-                    <span className="w-14 shrink-0">Health</span>
-                    <Input
-                      type="number"
+      {stage === 'playing' && devCheatsPortalTarget
+        ? (createPortal(
+            <Card className="flex-shrink-0 border-amber-200 bg-amber-50/50 shadow-md">
+              <CardHeader
+                className="flex flex-row items-center justify-between py-1.5 px-3 cursor-pointer"
+                onClick={() => {
+                  setDevCheatsOpen((o) => !o);
+                  if (!devCheatsOpen) loadDevFormFromStats();
+                }}
+              >
+                <CardTitle className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
+                  <Wrench className="size-3.5" />
+                  Developer cheats
+                </CardTitle>
+                <span className="text-[10px] text-amber-600">{devCheatsOpen ? '▼' : '▶'}</span>
+              </CardHeader>
+              {devCheatsOpen && (
+                <CardContent className="pt-0 px-3 pb-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
+                    <label className="flex items-center gap-1">
+                      <span className="w-14 shrink-0">Health</span>
+                      <Input
+                        type="number"
                       step="0.01"
                       min={0}
                       max={100}
@@ -4332,7 +4467,8 @@ export function LifeSimGame() {
             )}
           </Card>,
           devCheatsPortalTarget
-        )}
+        ) as unknown as React.ReactNode)
+        : null}
       <div className="relative z-10 flex flex-col flex-1 min-h-0 overflow-hidden p-2">
       <Dialog open={showAlreadyPaidRentDialog} onOpenChange={(open) => !open && (setShowAlreadyPaidRentDialog(false), setPendingMoveApartment(null))}>
         <DialogContent className="sm:max-w-md">
@@ -5566,28 +5702,44 @@ export function LifeSimGame() {
                       <Sparkles className="size-3.5 text-pink-500" />
                       <span className="text-xs font-medium text-slate-800">Beauty</span>
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{fmtStatOutOfTen(stats.beauty)}</div>
+                    <StatScaleTooltip stat="beauty" side="top">
+                      <div className="text-2xl font-bold text-slate-900 cursor-help">
+                        {fmtStatOutOfTen(stats.beauty)}
+                      </div>
+                    </StatScaleTooltip>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
                     <div className="flex items-center gap-1 mb-1">
                       <ScrollText className="size-3.5 text-indigo-500" />
                       <span className="text-xs font-medium text-slate-800">Smarts</span>
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{fmtStatOutOfTen(stats.smarts)}</div>
+                    <StatScaleTooltip stat="smarts" side="top">
+                      <div className="text-2xl font-bold text-slate-900 cursor-help">
+                        {fmtStatOutOfTen(stats.smarts)}
+                      </div>
+                    </StatScaleTooltip>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
                     <div className="flex items-center gap-1 mb-1">
                       <Dumbbell className="size-3.5 text-emerald-600" />
                       <span className="text-xs font-medium text-slate-800">Fitness</span>
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{fmtStatOutOfTen(stats.fitness)}</div>
+                    <StatScaleTooltip stat="fitness" side="top">
+                      <div className="text-2xl font-bold text-slate-900 cursor-help">
+                        {fmtStatOutOfTen(stats.fitness)}
+                      </div>
+                    </StatScaleTooltip>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
                     <div className="flex items-center gap-1 mb-1">
                       <Users className="size-3.5 text-sky-600" />
                       <span className="text-xs font-medium text-slate-800">Social</span>
                     </div>
-                    <div className="text-2xl font-bold text-slate-900">{fmtStatOutOfTen(stats.social)}</div>
+                    <StatScaleTooltip stat="social" side="top">
+                      <div className="text-2xl font-bold text-slate-900 cursor-help">
+                        {fmtStatOutOfTen(stats.social)}
+                      </div>
+                    </StatScaleTooltip>
                   </div>
                 </div>
                 <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 space-y-2">
