@@ -9,8 +9,8 @@ export function fmt2(n: number): string {
 }
 
 /** 0–10 player skills (beauty, smarts, fitness, social): "7.00/10.00" */
-export function fmtStatOutOfTen(value: number, max = 10): string {
-  return `${fmt2(value)}/${fmt2(max)}`;
+export function fmtStatOutOfTen(value: number): string {
+  return `${fmt2(value)}`;
 }
 
 /** Money: commas + always 2 decimal places. */

@@ -156,6 +156,7 @@ export interface InteractiveMapProps {
   onGymWorkout: (tier: GymTier, intensity: 'easy' | 'normal' | 'intense') => void;
   onGymChill: (hours: number) => void;
   onBuyGymSnack: (snackId: SnackId, price: number) => void;
+  onEatGymSnack: (snackId: SnackId, price: number) => void;
   onParkWalk: () => void;
   onSleep: (hours: number) => void;
   onEatMeal: (type: 'regular' | 'lux') => void;
@@ -458,6 +459,7 @@ export function InteractiveMap({
   onGymWorkout,
   onGymChill,
   onBuyGymSnack,
+  onEatGymSnack,
   onParkWalk,
   onSleep,
   onEatMeal,
@@ -509,6 +511,16 @@ export function InteractiveMap({
   schoolMeetClassmatesOpen,
   onDismissSchoolMeetClassmates,
 }: InteractiveMapProps) {
+  const degreeCareerInfo = React.useMemo(() => {
+    const out: Partial<Record<Degree, Array<{ jobName: string; tiers: string[] }>>> = {};
+    for (const job of jobs) {
+      if (!job.requiredDegree) continue;
+      const list = out[job.requiredDegree] ?? [];
+      list.push({ jobName: job.name, tiers: job.promotionTiers });
+      out[job.requiredDegree] = list;
+    }
+    return out;
+  }, [jobs]);
   const [selectedItem, setSelectedItem] = useState<Apartment | Job | null>(null);
   const [animatingTo, setAnimatingTo] = useState<MapPhase | null>(null);
   const [animatingDestDistrict, setAnimatingDestDistrict] = useState<DistrictName | null>(null);
@@ -683,11 +695,32 @@ export function InteractiveMap({
       <PhaseScrollRoot>
       <Card className={`${gameChromePanel} w-full min-h-full flex flex-col`}>
       <CardHeader className={`flex-shrink-0 py-2 px-3 ${gameChromePhaseCardHeader}`}>
-        <CardTitle className="text-base text-slate-900">Choose Your Home in Werdred</CardTitle>
-        <CardDescription className="text-xs text-slate-700">
-          Hover or tap a district to show homes there, then pick a house for rent and bonuses. Your district is your home
-          base on the map.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="text-base text-slate-900">Choose Your Home in Werdred</CardTitle>
+            <CardDescription className="text-xs text-slate-700">
+              Hover or tap a district to show homes there, then pick a house for rent and bonuses. Your district is your home
+              base on the map.
+            </CardDescription>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => {
+                // Let players leave the Housing Office without re-picking a home.
+                if (selectedApartment) onGoToHome();
+                else onGoToCityView();
+              }}
+            >
+              Back
+            </Button>
+            <Button variant="outline" size="sm" onClick={onOpenMapOverlay} className="text-xs">
+              Map
+            </Button>
+          </div>
+        </div>
       </CardHeader>
         <CardContent className="flex-1 min-h-0 flex flex-col md:flex-row gap-2 pt-0 px-2 pb-2">
           <div
@@ -713,7 +746,7 @@ export function InteractiveMap({
                     transform: 'translate(-50%, -50%)',
                   }}
                   aria-expanded={pinsActive}
-                  aria-label={`${district} district. ${pinsActive ? 'Homes shown' : 'Show homes in this district'}.`}
+                  aria-label={`${district}. ${pinsActive ? 'Homes shown' : 'Show homes here'}.`}
                   onMouseEnter={() => beginHomeDistrictHover(district)}
                   onMouseLeave={endHomeDistrictHoverSoon}
                   onFocus={() => beginHomeDistrictHover(district)}
@@ -723,7 +756,6 @@ export function InteractiveMap({
                   }}
                 >
                   <span className="text-[11px] font-bold text-slate-900 leading-tight text-center">{district}</span>
-                  <span className="text-[9px] font-medium text-slate-600 leading-none mt-0.5">district</span>
                 </button>
               );
             })}
@@ -793,7 +825,34 @@ export function InteractiveMap({
               animate={{ opacity: 1, y: 0 }}
               className={`${gameChromePanelMuted} p-3 sm:p-4 space-y-3`}
             >
-              <h3 className="text-lg sm:text-xl font-bold text-slate-900">{selectedItem.name}</h3>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-left cursor-help rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/45"
+                    aria-label="Apartment tips"
+                  >
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 border-b border-dotted border-slate-500/60 inline-block">
+                      {selectedItem.name}
+                    </h3>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  className={
+                    'max-w-[min(22rem,92vw)] text-left !rounded-md ' +
+                    '!bg-[#eef2f8] !text-slate-900 shadow-[4px_4px_0_0_rgba(15,23,42,0.22)] ' +
+                    '!border-[3px] !border-[#1a2332] px-3 py-2.5 ' +
+                    '[&>svg]:fill-[#eef2f8] [&>svg]:stroke-[#1a2332]'
+                  }
+                >
+                  <div className="text-[11px] text-slate-900 space-y-1">
+                    <div>Sleep restores energy (10-5/hr due to bed penalty).</div>
+                    <div>Rent: ${weeklyRent}/week (listed ${effectiveRent} per 28-day season)</div>
+                    <div>Buy furniture on the map — open any district and choose Furniture Store.</div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
               <div className="rounded-none border-[2px] border-[#1a2332] bg-[#d8e0eb] px-2.5 py-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">District</p>
                 <p className="text-base font-bold text-slate-900">{selectedItem.district}</p>
@@ -953,6 +1012,7 @@ export function InteractiveMap({
         onWorkout={onGymWorkout}
         onGymChill={onGymChill}
         onBuyGymSnack={onBuyGymSnack}
+        onEatGymSnack={onEatGymSnack}
         backpackId={backpackId}
         snackCounts={snackCounts}
         togoCarried={togoCarried}
@@ -1125,6 +1185,7 @@ export function InteractiveMap({
         onDismissSchoolTutorial={onDismissSchoolTutorial}
         schoolMeetClassmatesOpen={schoolMeetClassmatesOpen}
         onDismissSchoolMeetClassmates={onDismissSchoolMeetClassmates}
+        degreeCareerInfo={degreeCareerInfo}
       />
       </PhaseScrollRoot>
     );

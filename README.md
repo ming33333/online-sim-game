@@ -12,8 +12,9 @@
 
 # TODO
 
-1. less words on game
-2. some aesthetics
-3. more home object
+~~1.less words on game~~
+2. more home objects
+3. some aesthetics
 4. bank stuff, like CDs and index funds
+5. verify game mechanics are challenging and fun
 

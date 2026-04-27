@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { Home, UtensilsCrossed, Sparkles } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
   FURNITURE_BY_ID,
   type HomeFurnitureState,
@@ -130,31 +131,46 @@ export function HomeView({
           <div className="min-w-0">
             <CardTitle className="text-base flex items-center gap-2 text-slate-900">
               <Home className="size-4 text-sky-700" />
-              {apartmentName}
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="cursor-help rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/45"
+                    aria-label="Apartment info"
+                  >
+                    <span className="border-b border-dotted border-slate-500/70">{apartmentName}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  className={
+                    'max-w-[min(22rem,92vw)] text-left !rounded-md ' +
+                    '!bg-[#eef2f8] !text-slate-900 shadow-[4px_4px_0_0_rgba(15,23,42,0.22)] ' +
+                    '!border-[3px] !border-[#1a2332] px-3 py-2.5 ' +
+                    '[&>svg]:fill-[#eef2f8] [&>svg]:stroke-[#1a2332]'
+                  }
+                >
+                  <div className="text-[11px] text-slate-900 space-y-1">
+                    <div>
+                      Sleep restores energy ({BASE_ENERGY_PER_HOUR}{bedBonus < 0 ? `${bedBonus}` : bedBonus > 0 ? `+${bedBonus}` : ''}/hr
+                      {bedBonus < 0 ? ' due to bed penalty' : ''}).
+                    </div>
+                    {apartmentRent > 0 ? (
+                      <div>
+                        Rent: ${weeklyRent}/week (listed ${apartmentRent} per 28-day season)
+                      </div>
+                    ) : null}
+                    <div>Buy furniture on the map — open any district and choose Furniture Store.</div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
             </CardTitle>
             <CardDescription className="text-xs text-slate-700">
               {isHomeless ? (
                 <span className="block mt-1 text-amber-800">
                   You have no housing. Open the map and go to the Housing Office to rent a place.
                 </span>
-              ) : (
-                <>
-                  Sleep restores energy
-                  {bedBonus > 0
-                    ? ` (${BASE_ENERGY_PER_HOUR}+${bedBonus}/hr from your bed)`
-                    : bedBonus < 0
-                      ? ` (${BASE_ENERGY_PER_HOUR}${bedBonus}/hr due to bed penalty)`
-                      : ` (${BASE_ENERGY_PER_HOUR}/hr)`}.
-                  {apartmentRent > 0 && (
-                    <span className="block mt-1 text-gray-600">
-                      Rent: ${weeklyRent}/week (listed ${apartmentRent} per 28-day season)
-                    </span>
-                  )}
-                  <span className="block mt-1 text-gray-600">
-                    Buy furniture on the map — open any district and choose Furniture Store.
-                  </span>
-                </>
-              )}
+              ) : null}
             </CardDescription>
           </div>
           <div className="flex flex-col gap-1 items-stretch shrink-0">
@@ -399,41 +415,59 @@ export function HomeView({
 
           {!isHomeless && (
             <div className="border-t pt-4 space-y-2">
-              <label className="text-xs font-medium flex items-center gap-1">
-                <UtensilsCrossed className="size-3.5" />
-                Groceries at home
-              </label>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <label className="text-xs font-medium flex items-center gap-1 cursor-help w-fit">
+                    <UtensilsCrossed className="size-3.5" />
+                    <span className="border-b border-dotted border-slate-500/70">Groceries at home</span>
+                  </label>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  className={
+                    'max-w-[min(22rem,92vw)] text-left !rounded-md ' +
+                    '!bg-[#eef2f8] !text-slate-900 shadow-[4px_4px_0_0_rgba(15,23,42,0.22)] ' +
+                    '!border-[3px] !border-[#1a2332] px-3 py-2.5 ' +
+                    '[&>svg]:fill-[#eef2f8] [&>svg]:stroke-[#1a2332]'
+                  }
+                >
+                  <div className="text-[11px] text-slate-900 space-y-2">
+                    <div className="space-y-1">
+                      <div className="font-semibold">Spoil bar is 0–100% only (full = freshest).</div>
+                      <div>
+                        When it hits 0%, the next spoil tick throws out ~half of that stack (~every 12 in-game hours on the
+                        counter).
+                      </div>
+                      <div>Counter / overflow (no fridge space): ~50% lost per 12 in-game hours.</div>
+                    </div>
+
+                    {counterGroceries.regular > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-slate-800">
+                          Regular freshness {clampFreshnessPct(groceryFreshness.regular)}% · {counterGroceries.regular} →{' '}
+                          {nextRegularAfterSpoil} meals after next tick
+                        </div>
+                        <Progress value={clampFreshnessPct(groceryFreshness.regular)} className="h-1.5" />
+                      </div>
+                    )}
+                    {counterGroceries.lux > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-slate-800">
+                          Luxury freshness {clampFreshnessPct(groceryFreshness.lux)}% · {counterGroceries.lux} →{' '}
+                          {nextLuxAfterSpoil} meals after next tick
+                        </div>
+                        <Progress value={clampFreshnessPct(groceryFreshness.lux)} className="h-1.5" />
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
               <p className="text-[11px] text-gray-600">
                 Meals in pantry: {groceries.regular} regular, {groceries.lux} luxury
                 {hasFridge && cap != null && cap > 0 && !isLiveWithParents && (
                   <span className="block mt-1 text-emerald-800/90">
                     Fridge: {fridgeGroceries.regular + fridgeGroceries.lux}/{cap} portions safe · Counter (spoils):{' '}
                     {counterGroceries.regular} reg, {counterGroceries.lux} lux
-                  </span>
-                )}
-                {showCounterSpoil && (
-                  <span className="block mt-1 text-amber-900/90 space-y-1">
-                    <span className="block text-[10px]">
-                      Spoil bar is 0–100% only (full = freshest). When it hits 0%, the next spoil tick throws out ~half of
-                      that stack (~every 12 in-game hours on the counter).
-                    </span>
-                    <span className="block">
-                      Counter / overflow (no fridge space): ~50% lost per 12 in-game hours.
-                    </span>
-                    {counterGroceries.regular > 0 && (
-                      <span className="block">
-                        Regular freshness {clampFreshnessPct(groceryFreshness.regular)}% · {counterGroceries.regular} →{' '}
-                        {nextRegularAfterSpoil} meals after next tick
-                        <Progress value={clampFreshnessPct(groceryFreshness.regular)} className="h-1.5 mt-1" />
-                      </span>
-                    )}
-                    {counterGroceries.lux > 0 && (
-                      <span className="block">
-                        Luxury freshness {clampFreshnessPct(groceryFreshness.lux)}% · {counterGroceries.lux} →{' '}
-                        {nextLuxAfterSpoil} meals after next tick
-                        <Progress value={clampFreshnessPct(groceryFreshness.lux)} className="h-1.5 mt-1" />
-                      </span>
-                    )}
                   </span>
                 )}
                 {showTogoSpoil && (

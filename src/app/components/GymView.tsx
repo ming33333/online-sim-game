@@ -63,6 +63,7 @@ interface GymViewProps {
   onWorkout: (tier: GymTier, intensity: WorkoutIntensity) => void;
   onGymChill: (hours: number) => void;
   onBuyGymSnack: (snackId: SnackId, price: number) => void;
+  onEatGymSnack: (snackId: SnackId, price: number) => void;
   backpackId: BackpackId | null;
   snackCounts: Record<SnackId, number>;
   togoCarried: { regular: number; lux: number };
@@ -85,6 +86,7 @@ export function GymView({
   onWorkout,
   onGymChill,
   onBuyGymSnack,
+  onEatGymSnack,
   backpackId,
   snackCounts,
   togoCarried,
@@ -214,8 +216,7 @@ export function GymView({
             <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/50 p-3 space-y-2">
               <p className="text-xs font-medium">Vending snacks</p>
               <p className="text-[10px] text-gray-600">
-                Goes in your backpack ({backpackId ? `${backpackSpaceUsed}/${backpackCapacity} space` : 'buy a backpack first'}
-                ).
+                Choose to eat now or pack it. Backpack space: {backpackId ? `${backpackSpaceUsed}/${backpackCapacity}` : 'buy a backpack first'}.
               </p>
               <div className="space-y-2">
                 {GYM_SNACK_OFFERS.map(({ snackId, price }) => {
@@ -223,29 +224,43 @@ export function GymView({
                   const cap = backpackCapacity;
                   const fits = cap > 0 && usedSnacksOnly + s.spaceUnits <= cap;
                   const canBuy = currentMoney >= price && fits && backpackId != null;
+                  const canEatNow = currentMoney >= price;
                   return (
                     <div key={snackId} className="flex items-center justify-between gap-2 text-xs">
                       <span>
                         {s.label} +{s.hunger} · {s.spaceUnits} space
                       </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={!canBuy}
-                        className="shrink-0 h-7 text-[11px]"
-                        title={
-                          !backpackId
-                            ? 'Buy a backpack at the grocery store'
-                            : !fits
-                              ? 'Backpack full'
-                              : currentMoney < price
-                                ? `Need $${formatMoney(price)}`
-                                : undefined
-                        }
-                        onClick={() => onBuyGymSnack(snackId, price)}
-                      >
-                        {`$${formatMoney(price)}`}
-                      </Button>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canEatNow}
+                          className="h-7 px-2 text-[11px]"
+                          title={currentMoney < price ? `Need $${formatMoney(price)}` : 'Eat now'}
+                          onClick={() => onEatGymSnack(snackId, price)}
+                        >
+                          Eat
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canBuy}
+                          className="h-7 px-2 text-[11px]"
+                          title={
+                            !backpackId
+                              ? 'Buy a backpack at the grocery store'
+                              : !fits
+                                ? 'Backpack full'
+                                : currentMoney < price
+                                  ? `Need $${formatMoney(price)}`
+                                  : 'Put in backpack'
+                          }
+                          onClick={() => onBuyGymSnack(snackId, price)}
+                        >
+                          Pack
+                        </Button>
+                        <span className="text-[11px] tabular-nums text-slate-700 pl-1">${formatMoney(price)}</span>
+                      </div>
                     </div>
                   );
                 })}

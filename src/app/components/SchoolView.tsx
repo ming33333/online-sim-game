@@ -23,6 +23,7 @@ import {
 } from '../lib/relationships';
 import { useStoryBeatTyping, storyBeatDialogContentClassName } from '../lib/useStoryBeatTyping';
 import { cn } from './ui/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 type EducationLevel = 'none' | 'in-progress' | 'completed';
 type StudyIntensity = 'slack' | 'normal' | 'focus';
@@ -52,6 +53,7 @@ interface SchoolViewProps {
   onDismissSchoolTutorial: () => void;
   schoolMeetClassmatesOpen: boolean;
   onDismissSchoolMeetClassmates: () => void;
+  degreeCareerInfo: Partial<Record<Degree, Array<{ jobName: string; tiers: string[] }>>>;
 }
 
 const DEGREE_DAYS_NORMAL = 80;
@@ -127,34 +129,31 @@ export function SchoolView({
   onDismissSchoolTutorial,
   schoolMeetClassmatesOpen,
   onDismissSchoolMeetClassmates,
+  degreeCareerInfo,
 }: SchoolViewProps) {
   /** Slightly darker than default dialog scrim — matches other full-screen game layers. */
   const gameEventOverlayClass = 'bg-slate-950/60 backdrop-blur-[2px]';
 
-  const degrees: { id: Degree; label: string; description: string; note: string }[] = [
+  const degrees: { id: Degree; label: string; description: string;}[] = [
     {
       id: 'accounting',
       label: 'Accounting',
       description: 'Learn bookkeeping, tax, and financial reporting.',
-      note: 'Unlocks office and accounting careers.',
     },
     {
       id: 'engineering',
       label: 'Engineering',
       description: 'Study math, physics, and building complex systems.',
-      note: 'Unlocks technical and engineering careers.',
     },
     {
       id: 'doctor',
       label: 'Doctor (Med School)',
       description: 'Long, intense medical training to become a doctor.',
-      note: 'Requires full med school but unlocks doctor careers.',
     },
     {
       id: 'finance',
       label: 'Finance',
       description: 'Dive into markets, investing, and corporate finance.',
-      note: 'Unlocks high-paying finance careers.',
     },
   ];
 
@@ -415,12 +414,24 @@ export function SchoolView({
         className={`flex flex-shrink-0 items-center justify-between gap-4 px-3 py-3 sm:px-4 ${gameChromePhaseCardHeader}`}
       >
         <div className="min-w-0">
-          <CardTitle className="text-lg sm:text-xl text-slate-900">Choose Your Degree</CardTitle>
-          <CardDescription className="text-slate-700 text-xs sm:text-sm mt-1">
-            Pick a major during the <strong>first 14 days</strong> of each season; after that, wait for the next season to
-            enroll. Pay tuition on your phone each season to study. When your <strong>progress hits 100%</strong>, you earn
-            the degree and unlock matching careers.
-          </CardDescription>
+          <CardTitle className="text-lg sm:text-xl text-slate-900">
+            <Tooltip delayDuration={150}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex cursor-help items-center gap-2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50"
+                  aria-label="Choose your degree — enrollment and tuition rules"
+                >
+                  <span className="border-b border-dotted border-slate-500/80">Choose Your Degree</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-sm text-left">
+                Pick a major during the first 14 days of each season; after that, wait for the next season to enroll. Pay
+                tuition on your phone each season to study. When your progress hits 100%, you earn the degree and unlock
+                matching careers.
+              </TooltipContent>
+            </Tooltip>
+          </CardTitle>
         </div>
         <Button variant="outline" size="sm" onClick={onOpenMapOverlay} className="shrink-0">
           Map
@@ -430,11 +441,7 @@ export function SchoolView({
         {schoolCampusOpen && (
           <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-4 space-y-3">
             <div>
-              <p className="text-sm font-semibold text-gray-900">Lounge & campus café</p>
-              <p className="text-xs text-gray-600 mt-0.5">
-                Relax or eat between classes. Chilling works like home (no décor bonus). Public nap restores twice as much
-                energy as chilling, with no hunger cost, but costs −2 happiness per nap session (any duration).
-              </p>
+              <p className="text-sm font-semibold text-gray-900">Campus Café</p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-800 mb-1">Chill in the lounge (hours)</p>
@@ -452,8 +459,8 @@ export function SchoolView({
               <Button
                 type="button"
                 size="sm"
-                variant="secondary"
-                className="mt-2"
+                variant="outline"
+                className="mt-2 bg-white hover:bg-slate-200"
                 onClick={() => onChillAtSchool(loungeChillHours)}
               >
                 Chill
@@ -513,11 +520,7 @@ export function SchoolView({
         {schoolCampusOpen && (
           <div className="rounded-lg border border-violet-200 bg-violet-50/80 p-4 space-y-3">
             <div>
-              <p className="text-sm font-semibold text-gray-900">Classmates · lounge</p>
-              <p className="text-xs text-gray-600 mt-0.5">
-                Chat builds relationships (relationship level once per in-game day each). Ask out at 50+ chats if you&apos;re
-                not dating someone else.
-              </p>
+              <p className="text-sm font-semibold text-gray-900">Classmates</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {SCHOOL_LOUNGE_NPC_IDS.map((npcId) => {
@@ -531,8 +534,7 @@ export function SchoolView({
                   >
                     <p className="text-xs font-semibold text-gray-900">{p.name}</p>
                     <p className="text-[11px] text-violet-950">
-                      {relationshipStageLabel(count, datingPartnerId === npcId)} · {count} chat
-                      {count === 1 ? '' : 's'}
+                      {relationshipStageLabel(count, datingPartnerId === npcId)}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" size="sm" variant="secondary" onClick={() => onTalkToNpc(npcId)}>
@@ -570,25 +572,27 @@ export function SchoolView({
               educationLevel === 'in-progress' && educationDegree === degree.id;
 
             return (
-              <motion.div
-                key={degree.id}
-                whileHover={{ scale: isCompleted ? 1 : 1.02 }}
-                whileTap={{ scale: isCompleted ? 1 : 0.98 }}
-                className={`border-2 p-5 rounded-lg bg-white transition-all ${
-                  isCompleted
-                    ? 'border-green-400 bg-green-50 cursor-default'
-                    : isActive
-                      ? 'border-purple-400 bg-purple-50 cursor-default'
-                      : !schoolCampusOpen
-                        ? 'border-gray-200 opacity-60 cursor-not-allowed'
-                        : 'border-gray-200 hover:border-purple-400 hover:shadow-xl cursor-pointer'
-                }`}
-                onClick={() => {
-                  if (!isCompleted && !hasActiveDegree && schoolCampusOpen) {
-                    setDegreeToEnroll(degree.id);
-                  }
-                }}
-              >
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <motion.div
+                    key={degree.id}
+                    whileHover={{ scale: isCompleted ? 1 : 1.02 }}
+                    whileTap={{ scale: isCompleted ? 1 : 0.98 }}
+                    className={`border-2 p-5 rounded-lg bg-white transition-all ${
+                      isCompleted
+                        ? 'border-green-400 bg-green-50 cursor-default'
+                        : isActive
+                          ? 'border-purple-400 bg-purple-50 cursor-default'
+                          : !schoolCampusOpen
+                            ? 'border-gray-200 opacity-60 cursor-not-allowed'
+                            : 'border-gray-200 hover:border-purple-400 hover:shadow-xl cursor-pointer'
+                    }`}
+                    onClick={() => {
+                      if (!isCompleted && !hasActiveDegree && schoolCampusOpen) {
+                        setDegreeToEnroll(degree.id);
+                      }
+                    }}
+                  >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div>
                     <h3 className="text-lg font-bold">{degree.label}</h3>
@@ -605,16 +609,41 @@ export function SchoolView({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">{degree.note}</p>
-                {!isCompleted && !isActive && !hasActiveDegree && schoolCampusOpen && (
-                  <p className="text-xs text-purple-600 mt-2">
-                    Click to start this degree (tuition for this season will be charged if not already paid).
-                  </p>
-                )}
                 {!isCompleted && !isActive && !hasActiveDegree && !schoolCampusOpen && (
                   <p className="text-xs text-amber-800 mt-2">{schoolCampusClosedReason}</p>
                 )}
-              </motion.div>
+                  </motion.div>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  className={
+                    'max-w-sm text-left !rounded-md ' +
+                    '!bg-[#eef2f8] !text-slate-900 shadow-[4px_4px_0_0_rgba(15,23,42,0.22)] ' +
+                    '!border-[3px] !border-[#1a2332] px-3 py-2.5 ' +
+                    '[&>svg]:fill-[#eef2f8] [&>svg]:stroke-[#1a2332]'
+                  }
+                >
+                  <div className="text-xs font-semibold mb-1 text-slate-900">Careers & levels</div>
+                  {(degreeCareerInfo?.[degree.id] ?? []).length > 0 ? (
+                    <div className="space-y-2 text-xs">
+                      {(degreeCareerInfo?.[degree.id] ?? []).map((job) => (
+                        <div key={job.jobName}>
+                          <div className="font-semibold text-slate-900">{job.jobName}</div>
+                          <div className="mt-1 space-y-0.5">
+                            {job.tiers.map((tier, idx) => (
+                              <div key={tier} className="text-[11px] leading-snug text-slate-800">
+                                <span className="font-semibold tabular-nums">Level {idx + 1}:</span> {tier}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-700">Career info unavailable.</div>
+                  )}
+                </TooltipContent>
+              </Tooltip>
             );
           })}
         </div>
@@ -682,15 +711,26 @@ export function SchoolView({
             )}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold">
-                  Current degree:{' '}
-                  {educationDegree.charAt(0).toUpperCase()}
-                  {educationDegree.slice(1)}
-                </p>
-                <p className="text-xs text-gray-600">
-                  Choose study hours and effort level. 8 hours = 1 day&apos;s progress toward <strong>100%</strong> (then
-                  you graduate). No extra cost per study session once tuition is paid for the season.
-                </p>
+                <Tooltip delayDuration={150}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-sm font-semibold inline-flex items-center gap-1 cursor-help rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50"
+                      aria-label="Current degree — study tips"
+                    >
+                      <span className="border-b border-dotted border-slate-500/80">Current degree</span>
+                      <span>:</span>
+                      <span>
+                        {educationDegree.charAt(0).toUpperCase()}
+                        {educationDegree.slice(1)}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-sm text-left">
+                    Choose study hours and effort level. 8 hours = 1 day&apos;s progress toward 100% (then you graduate).
+                    No extra cost per study session once tuition is paid for the season.
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="w-40">
                 <Progress value={educationProgress} className="h-2" />
@@ -717,42 +757,62 @@ export function SchoolView({
                 />
                 <span className="text-sm font-bold w-8">{hours}h</span>
               </div>
-              <p className="text-[11px] text-gray-500">
-                Tuition paid; no cost to study.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!schoolCampusOpen || !tuitionPaidCurrentSeason}
-                onClick={() => onStudy('slack', hours)}
-              >
-                Slack
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!schoolCampusOpen || !tuitionPaidCurrentSeason}
-                onClick={() => onStudy('normal', hours)}
-              >
-                Normal
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!schoolCampusOpen || !tuitionPaidCurrentSeason}
-                onClick={() => onStudy('focus', hours)}
-              >
-                Focused
-              </Button>
-            </div>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} className="inline-flex">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!schoolCampusOpen || !tuitionPaidCurrentSeason}
+                      onClick={() => onStudy('slack', hours)}
+                    >
+                      Slack
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-left">
+                  Slack: slower progress, keeps happiness higher.
+                </TooltipContent>
+              </Tooltip>
 
-            <div className="text-xs text-gray-600 space-y-1">
-              <p>Slack: slower progress, keeps happiness higher.</p>
-              <p>Normal: balanced progress, moderate stress.</p>
-              <p>Focused: fastest progress, more stress, more smarts gain.</p>
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} className="inline-flex">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!schoolCampusOpen || !tuitionPaidCurrentSeason}
+                      onClick={() => onStudy('normal', hours)}
+                    >
+                      Normal
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-left">
+                  Normal: balanced progress, moderate stress.
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} className="inline-flex">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!schoolCampusOpen || !tuitionPaidCurrentSeason}
+                      onClick={() => onStudy('focus', hours)}
+                    >
+                      Focused
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-left">
+                  Focused: fastest progress, more stress, more smarts gain.
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         )}

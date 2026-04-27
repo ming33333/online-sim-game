@@ -2,7 +2,7 @@
  * Furniture & appliances for home — affects sleep, meals, spoilage, chill.
  */
 
-export type FurnitureCategory = 'bed' | 'fridge' | 'stove' | 'decoration' | 'tv';
+export type FurnitureCategory = 'bed' | 'fridge' | 'stove' | 'decoration' | 'tv' | 'desk';
 
 export interface FurnitureItem {
   id: string;
@@ -104,6 +104,14 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     eatHungerBonus: 8,
   },
   {
+    id: 'desk-basic',
+    name: 'Study desk',
+    description: 'A proper desk for studying and getting work done.',
+    cost: 160,
+    category: 'desk',
+    icon: '🪑',
+  },
+  {
     id: 'decor-plant',
     name: 'House plants',
     description: 'Greenery helps you relax at home.',
@@ -167,6 +175,7 @@ export interface HomeFurnitureState {
   bedId: string | null;
   fridgeId: string | null;
   stoveId: string | null;
+  deskId: string | null;
   tvId: string | null;
   decorationIds: string[];
 }
@@ -175,6 +184,7 @@ export const EMPTY_HOME_FURNITURE: HomeFurnitureState = {
   bedId: null,
   fridgeId: null,
   stoveId: null,
+  deskId: null,
   tvId: null,
   decorationIds: [],
 };
@@ -184,6 +194,7 @@ export const LIVE_WITH_PARENTS_DEFAULT_FURNITURE: HomeFurnitureState = {
   bedId: 'bed-queen',
   fridgeId: 'fridge-standard',
   stoveId: null,
+  deskId: 'desk-basic',
   tvId: null,
   decorationIds: [],
 };
@@ -202,6 +213,10 @@ export function getEatHungerBonus(f: HomeFurnitureState): number {
 
 export function hasFridge(f: HomeFurnitureState): boolean {
   return f.fridgeId != null;
+}
+
+export function hasDesk(f: HomeFurnitureState): boolean {
+  return f.deskId != null;
 }
 
 export function getFridgeMealCapacity(fridgeId: string | null): number | null {

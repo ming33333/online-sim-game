@@ -36,6 +36,7 @@ import {
   type FurnitureItem,
   type HomeFurnitureState,
   FURNITURE_BY_ID,
+  hasDesk,
   hasFridge,
   getFridgeDailyEffects,
   getFridgeMealCapacity,
@@ -57,6 +58,7 @@ import {
   INTRO_MENU_FADE_DELAY_SEC,
   INTRO_MENU_FADE_DURATION_SEC,
 } from '../lib/menuSounds';
+import { playTimeSwooshSound } from '../lib/timeSounds';
 import { round2, fmt2, fmtStatOutOfTen, formatMoney } from '../lib/formatNumber';
 import { gameChromePanel, gameChromePanelHeader, gameChromePanelMuted } from '../lib/gameChrome';
 import {
@@ -348,7 +350,7 @@ const CHARACTER_PRESETS: CharacterPreset[] = [
     id: 'privileged',
     name: 'Privileged Start',
     description: 'You grew up with plenty of resources and advantages.',
-    startingMoney: 5000,
+    startingMoney: 10000,
     beauty: 7,
     smarts: 7,
     fitness: 7,
@@ -1019,6 +1021,7 @@ export function LifeSimGame() {
   const [nameMaxHintLast, setNameMaxHintLast] = useState(false);
   const [selectedApartment, setSelectedApartment] = useState<Apartment | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [jobsCatalog, setJobsCatalog] = useState<Job[]>(() => JOBS);
   const [jobSchedule, setJobSchedule] = useState<JobSchedule>('full-time');
   const [jobTierIndex, setJobTierIndex] = useState(0); // 0 = entry tier; used with job.promotionTiers
   const [jobTierStartedYear, setJobTierStartedYear] = useState(START_YEAR);
@@ -1053,6 +1056,8 @@ export function LifeSimGame() {
   const [educationLevel, setEducationLevel] = useState<EducationLevel>('none');
   const [educationDegree, setEducationDegree] = useState<Degree | null>(null);
   const [educationProgress, setEducationProgress] = useState(0);
+  const [parentRelation, setParentRelation] = useState(30); // 0–100
+  const [lastParentCallDay, setLastParentCallDay] = useState<number | null>(null);
   /** First school visit: campus tutorial, then classmates intro event, then done for this playthrough. */
   const [schoolOnboardingPhase, setSchoolOnboardingPhase] = useState<
     'tutorial' | 'meet-classmates' | 'done'
@@ -1157,6 +1162,23 @@ export function LifeSimGame() {
   const [dailyActivitiesOpen, setDailyActivitiesOpen] = useState(false);
   const [devCheatsOpen, setDevCheatsOpen] = useState(false);
   const [calendarOverlayOpen, setCalendarOverlayOpen] = useState(false);
+  const lastTimeSwooshAtRef = useRef(0);
+  const timeSwooshPrimedRef = useRef(false);
+  useEffect(() => {
+    // Avoid playing on first render; only on actual time updates.
+    if (!timeSwooshPrimedRef.current) {
+      timeSwooshPrimedRef.current = true;
+      return;
+    }
+    const now = performance.now();
+    if (now - lastTimeSwooshAtRef.current < 140) return; // cooldown
+    lastTimeSwooshAtRef.current = now;
+    try {
+      playTimeSwooshSound();
+    } catch {
+      /* ignore audio errors */
+    }
+  }, [stats.dayOfYear, stats.hourOfDay]);
   const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
   const [playerHubCollapsed, setPlayerHubCollapsed] = useState(false);
   const [pendingGoHomeAnimation, setPendingGoHomeAnimation] = useState(false);
@@ -1268,12 +1290,33 @@ export function LifeSimGame() {
   const startGame = () => {
     if (!selectedCharacter) return;
 
+    const randomizeJobSchedules = (jobs: Job[]): Job[] => {
+      const pickStart = () => {
+        // Mon–Fri shifts, keep end <= 24 for readability.
+        const options = [6, 7, 8, 9, 10, 11, 12, 13] as const;
+        return options[Math.floor(Math.random() * options.length)];
+      };
+      return jobs.map((j) => {
+        if (j.workStartHour === 0 && j.workEndHourFull === 24) return j;
+        const start = pickStart();
+        const endFull = start + 8; // 8h/day × 5 = 40h
+        const endPart = start + 4; // 4h/day × 5 = 20h
+        return {
+          ...j,
+          workStartHour: start,
+          workEndHourFull: endFull,
+          workEndHourPart: j.allowsPartTime ? endPart : undefined,
+        };
+      });
+    };
+
     const randomStatLowBias = (min: number, max: number) => {
       const range = max - min;
       const skew = Math.pow(Math.random(), 1.5);
       return Math.round((min + range * skew) * 100) / 100;
     };
     setStage('playing');
+    setJobsCatalog(randomizeJobSchedules(JOBS));
     setStats({
       year: START_YEAR,
       dayOfYear: 1,
@@ -1291,6 +1334,8 @@ export function LifeSimGame() {
     });
     setActivityCount(0);
     setEventLog([]);
+    setParentRelation(selectedCharacter.id === 'privileged' ? 55 : selectedCharacter.id === 'middle' ? 35 : 20);
+    setLastParentCallDay(null);
     fullMoonDewmistParkWitnessRef.current = null;
     setSelectedApartment(null);
     setSelectedJob(null);
@@ -1329,6 +1374,74 @@ export function LifeSimGame() {
     setPendingLeaveWork(null);
     leaveWorkDialogShownForDayRef.current = null;
     setSchoolOnboardingPhase('tutorial');
+  };
+
+  const callParentsChat = () => {
+    if (lastParentCallDay === stats.dayOfYear) {
+      setEventLog((prev) => [
+        {
+          id: Date.now(),
+          text: "You already called your parents today. Give them a little space.",
+          timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+          effects: {},
+        },
+        ...prev,
+      ]);
+      return;
+    }
+    setLastParentCallDay(stats.dayOfYear);
+    setParentRelation((r) => Math.min(100, r + 6));
+    advanceTime(
+      { happiness: 2, social: 0.2 },
+      'You chatted with your parents. They sound happy to hear from you.',
+      0.25
+    );
+  };
+
+  const callParentsAskMoney = () => {
+    if (lastParentCallDay === stats.dayOfYear) {
+      setEventLog((prev) => [
+        {
+          id: Date.now(),
+          text: "You already called your parents today. Try again another day.",
+          timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+          effects: {},
+        },
+        ...prev,
+      ]);
+      return;
+    }
+    setLastParentCallDay(stats.dayOfYear);
+
+    const presetId = selectedCharacter?.id;
+    const baseChance = presetId === 'privileged' ? 0.65 : presetId === 'middle' ? 0.45 : 0.25;
+    const relationBonus = Math.min(0.25, Math.max(0, parentRelation / 100) * 0.25);
+    const chance = Math.min(0.9, baseChance + relationBonus);
+
+    const roll = Math.random();
+    if (roll > chance) {
+      setParentRelation((r) => Math.max(0, r - 2));
+      advanceTime(
+        { happiness: -1 },
+        "You asked your parents for money, but they said no this time.",
+        0.25
+      );
+      return;
+    }
+
+    const amount =
+      presetId === 'privileged'
+        ? Math.round(300 + Math.random() * 900)
+        : presetId === 'middle'
+          ? Math.round(120 + Math.random() * 480)
+          : Math.round(60 + Math.random() * 240);
+
+    setParentRelation((r) => Math.min(100, r + 2));
+    advanceTime(
+      { money: amount, happiness: 1 },
+      `You asked your parents for money. They sent you $${amount.toLocaleString()}.`,
+      0.25
+    );
   };
 
   useEffect(() => {
@@ -2099,15 +2212,15 @@ export function LifeSimGame() {
 
       const seasonEndDays = [28, 56, 84, 112];
 
-      // Tuition reminder: 3 days before season end if enrolled in a degree.
+      // Tuition reminder: 1 week before season end if enrolled in a degree (prepay window for next season).
       if (
         educationLevel === 'in-progress' &&
-        seasonEndDays.some((end) => newDayOfYear === end - 3)
+        seasonEndDays.some((end) => newDayOfYear === end - 6)
       ) {
         setEventLog((prev) => [
           {
             id: Date.now() + 300,
-            text: '📱 Tuition reminder: In 3 days the next season starts — you must pay tuition on your phone for that season or you cannot study. Campus is only open the first two weeks of each season.',
+            text: '📱 Tuition reminder: Next season starts in 1 week — you can pre-pay tuition on your phone now (for next season) so you can study right away on day 1. Campus is only open the first two weeks of each season.',
             timestamp: formatTimestamp(newYear, newDayOfYear, newHourOfDay),
             effects: {},
           },
@@ -2602,6 +2715,19 @@ export function LifeSimGame() {
     const SEASON_END_DAYS = [28, 56, 84, 112];
     const seasonIndex = SEASON_END_DAYS.findIndex((d) => d >= stats.dayOfYear);
     const currentSeasonIndex = seasonIndex >= 0 ? seasonIndex : SEASON_END_DAYS.length - 1;
+    const currentSeasonEnd = SEASON_END_DAYS[currentSeasonIndex];
+
+    // Pre-paying next season is only allowed during the last week of the current season.
+    if (forNextSeason && stats.dayOfYear < currentSeasonEnd - 6) {
+      const warnEntry: LogEntry = {
+        id: Date.now(),
+        text: 'You can only pre-pay tuition for next season during the last week of the current season.',
+        timestamp: formatTimestamp(stats.year, stats.dayOfYear),
+        effects: {},
+      };
+      setEventLog((prev) => [warnEntry, ...prev]);
+      return null;
+    }
 
     const targetSeasonIndex = forNextSeason
       ? (currentSeasonIndex + 1) % SEASON_END_DAYS.length
@@ -2764,6 +2890,19 @@ export function LifeSimGame() {
       return;
     }
 
+    if (!hasDesk(homeFurniture)) {
+      setEventLog((prev) => [
+        {
+          id: Date.now(),
+          text: 'You need a desk to study. Visit the Furniture Store and buy a Study desk first.',
+          timestamp: formatTimestamp(stats.year, stats.dayOfYear, stats.hourOfDay),
+          effects: {},
+        },
+        ...prev,
+      ]);
+      return;
+    }
+
     // Block study if tuition for this season has not been paid.
     const SEASON_END_DAYS = [28, 56, 84, 112];
     const seasonEnd = SEASON_END_DAYS.find((d) => d >= stats.dayOfYear) ?? 112;
@@ -2785,7 +2924,7 @@ export function LifeSimGame() {
       normal: 1,
       focus: 0.66 / 0.5,
     };
-    const rawDelta = progressPerDayNormal * multipliers[intensity] * scale * 0.5; // half progression rate
+    const rawDelta = progressPerDayNormal * multipliers[intensity] * scale; // 2× progression rate
     const progressDelta = Math.min(100 - educationProgress, Math.round(rawDelta * 100) / 100);
     const newProgress = Math.round((educationProgress + progressDelta) * 100) / 100;
 
@@ -3042,6 +3181,16 @@ export function LifeSimGame() {
       { money: -price },
       `You bought ${s.label} at the gym ($${formatMoney(price)}).`,
       0.1
+    );
+  };
+
+  const eatGymSnackNow = (snackId: SnackId, price: number) => {
+    const s = SNACK_BY_ID[snackId];
+    if (!s || stats.money < price) return;
+    advanceTime(
+      { money: -price, hunger: s.hunger },
+      `Gym vending: you ate ${s.label}. Hunger +${s.hunger}, −$${formatMoney(price)} (${fmt2(EAT_SNACK_HOURS)} hr).`,
+      EAT_SNACK_HOURS
     );
   };
 
@@ -3408,6 +3557,7 @@ export function LifeSimGame() {
         return { ...prev, decorationIds: [...prev.decorationIds, item.id] };
       }
       if (item.category === 'bed') return { ...prev, bedId: item.id };
+      if (item.category === 'desk') return { ...prev, deskId: item.id };
       if (item.category === 'tv') return { ...prev, tvId: item.id };
       return { ...prev, stoveId: item.id };
     });
@@ -3431,6 +3581,10 @@ export function LifeSimGame() {
     }
     if (h.stoveId) {
       const it = FURNITURE_BY_ID[h.stoveId];
+      if (it) out.push(it);
+    }
+    if (h.deskId) {
+      const it = FURNITURE_BY_ID[h.deskId];
       if (it) out.push(it);
     }
     if (h.tvId) {
@@ -3530,6 +3684,7 @@ export function LifeSimGame() {
         }
         if (item.category === 'bed' && prev.bedId === itemId) return { ...prev, bedId: null };
         if (item.category === 'stove' && prev.stoveId === itemId) return { ...prev, stoveId: null };
+        if (item.category === 'desk' && prev.deskId === itemId) return { ...prev, deskId: null };
         if (item.category === 'tv' && prev.tvId === itemId) return { ...prev, tvId: null };
         return prev;
       });
@@ -4825,6 +4980,39 @@ export function LifeSimGame() {
             <DialogTitle>Phone</DialogTitle>
             <DialogDescription>Messages and important notices.</DialogDescription>
           </DialogHeader>
+          <div className="rounded-md border border-slate-300 bg-white/70 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-slate-900">Call parents</div>
+              <div className="text-[10px] text-slate-600 tabular-nums">
+                Relationship: {Math.round(parentRelation)}/100
+              </div>
+            </div>
+            <div className="mt-2 flex gap-2 flex-wrap">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px] bg-white hover:bg-slate-200"
+                onClick={callParentsChat}
+                disabled={stage !== 'playing'}
+              >
+                Chat
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px] bg-white hover:bg-slate-200"
+                onClick={callParentsAskMoney}
+                disabled={stage !== 'playing'}
+              >
+                Ask for money
+              </Button>
+            </div>
+            <div className="mt-1 text-[10px] text-slate-600">
+              Better relationship = better chance to get money (Privileged starts higher).
+            </div>
+          </div>
           <div className="max-h-64 overflow-y-auto text-sm space-y-2">
             {rentOverdue && selectedApartment && selectedApartment.rent > 0 && (
               <div className="border-l-4 border-amber-500 pl-2 py-1 bg-amber-50 rounded-r">
@@ -4959,7 +5147,7 @@ export function LifeSimGame() {
               onActivityComplete={handleMapActivity}
               gamePhase={gamePhase}
               apartments={APARTMENTS}
-              jobs={JOBS}
+                jobs={jobsCatalog}
               onSelectApartment={(apt) => {
                 if (selectedApartment?.id === apt.id) return;
                 if (selectedApartment != null && lastRentPaidSeasonEndDay != null) {
@@ -5038,6 +5226,7 @@ export function LifeSimGame() {
               onGymWorkout={gymWorkout}
               onGymChill={gymChill}
               onBuyGymSnack={buySnackAtGym}
+              onEatGymSnack={eatGymSnackNow}
               onParkWalk={parkWalk}
               onSleep={sleep}
               onEatMeal={eatMeal}
@@ -5694,7 +5883,6 @@ export function LifeSimGame() {
                     <Sparkles className="size-4 text-pink-500" />
                     Player skills
                   </DialogTitle>
-                  <DialogDescription className="text-xs">Traits on a 0–10 scale.</DialogDescription>
                 </DialogHeader>
                 <div className="grid grid-cols-2 gap-3 py-1">
                   <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
@@ -5855,9 +6043,39 @@ export function LifeSimGame() {
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <Clock className="size-3.5 text-slate-500 shrink-0" />
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800 tabular-nums truncate">
-                          {formatHubDateTime(stats.dayOfYear, stats.hourOfDay)}
-                        </span>
+                        {(() => {
+                          const dayText = `${formatDayOfWeek(stats.dayOfYear)} - Week ${
+                            Math.floor((stats.dayOfYear - 1) / DAYS_PER_WEEK) + 1
+                          } -`;
+                          const timeText = formatTime(stats.hourOfDay);
+                          const minuteKey = Math.floor(stats.hourOfDay * 60);
+                          return (
+                            <AnimatePresence mode="wait" initial={false}>
+                              <motion.span
+                                key={`${stats.year}-${stats.dayOfYear}`}
+                                className="text-xs sm:text-sm font-semibold text-slate-800 tabular-nums truncate"
+                                initial={{ opacity: 0, filter: 'blur(6px)' }}
+                                animate={{ opacity: 1, filter: 'blur(0px)' }}
+                                exit={{ opacity: 0, filter: 'blur(6px)' }}
+                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                              >
+                                <span className="truncate">{dayText} </span>
+                                <AnimatePresence mode="wait" initial={false}>
+                                  <motion.span
+                                    key={minuteKey}
+                                    className="inline-block tabular-nums"
+                                    initial={{ opacity: 0, filter: 'blur(4px)' }}
+                                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                                    exit={{ opacity: 0, filter: 'blur(4px)' }}
+                                    transition={{ duration: 0.14, ease: 'easeOut' }}
+                                  >
+                                    {timeText}
+                                  </motion.span>
+                                </AnimatePresence>
+                              </motion.span>
+                            </AnimatePresence>
+                          );
+                        })()}
                       </div>
                     </button>
                     <Button
@@ -5993,10 +6211,12 @@ export function LifeSimGame() {
                                 dayOfYearForCell === 1 || WEEK_END_DAYS.includes(dayOfYearForCell - 1);
                               const isGymDay = (dayOfYearForCell - 1) % 7 === 0;
                               const isFullMoonDay = isFullMoonCalendarDay(dayOfYearForCell);
+                              const isTuitionPrepayReminderDay =
+                                educationLevel === 'in-progress' && d === DAYS_PER_SEASON - 6;
                               return (
                                 <div
                                   key={d}
-                                  title={`Day ${dayOfYearForCell}${isRentDay ? ' · Rent' : ''}${isGymDay ? ' · Gym fee' : ''}${isFullMoonDay ? ' · Full moon' : ''}`}
+                                  title={`Day ${dayOfYearForCell}${isRentDay ? ' · Rent' : ''}${isGymDay ? ' · Gym fee' : ''}${isFullMoonDay ? ' · Full moon' : ''}${isTuitionPrepayReminderDay ? ' · Tuition prepay' : ''}`}
                                   className={`aspect-square flex flex-col items-center justify-center rounded text-xs font-medium relative pb-3 ${
                                     isCurrent ? 'bg-sky-800 text-white ring-2 ring-sky-400' : 'bg-slate-200 text-slate-700'
                                   }`}
@@ -6005,6 +6225,9 @@ export function LifeSimGame() {
                                   <div className="absolute bottom-0.5 left-0 right-0 flex justify-center gap-0.5 text-[9px] leading-none">
                                     {isRentDay && <span className="text-amber-600">$</span>}
                                     {isGymDay && <span className="text-sky-600">🏋</span>}
+                                    {isTuitionPrepayReminderDay && (
+                                      <span className={isCurrent ? 'text-amber-100' : 'text-violet-700'}>🎓</span>
+                                    )}
                                     {isFullMoonDay && (
                                       <span className={isCurrent ? 'text-amber-100' : 'text-indigo-700'}>🌕</span>
                                     )}
@@ -6014,10 +6237,14 @@ export function LifeSimGame() {
                             });
                           })()}
                         </div>
-                        <p className="text-[10px] text-gray-500">
-                          $ = weekly rent charge · 🏋 = weekly gym fee (if you have a membership) · 🌕 = full moon
-                          (last day of each season; at night in Dewmist Park you get a special moment)
-                        </p>
+                        <div className="text-[10px] text-gray-500 space-y-0.5">
+                          <div>$ = weekly rent charge</div>
+                          <div>🏋 = weekly gym fee (if you have a membership)</div>
+                          <div>🎓 = tuition prepay reminder (last week of season, if you're studying)</div>
+                          <div>
+                            🌕 = full moon (last day of each season; at night in Dewmist Park you get a special moment)
+                          </div>
+                        </div>
                         <div className="pt-2 border-t">
                           <div className="flex items-center gap-1 mb-1">
                             <Cloud className="size-3.5 text-sky-500" />

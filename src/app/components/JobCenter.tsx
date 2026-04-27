@@ -46,6 +46,40 @@ function formatTime(hour: number): string {
   return `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
 }
 
+function formatJobTooltip(
+  job: Job,
+  getSalaryPerDay: (job: Job) => number,
+  getSalaryPerHour: (job: Job) => number,
+  getEffectiveSalary: (job: Job) => number
+): {
+  line1: string;
+  line2: string;
+  schedule: string;
+} {
+  const perDay = getSalaryPerDay(job);
+  const perHour = getSalaryPerHour(job);
+  const perSeason = getEffectiveSalary(job);
+  const perWeek = perSeason / 4;
+
+  const full = job.workStartHour === 0 && job.workEndHourFull === 24
+    ? 'Flexible'
+    : `Mon–Fri ${formatTime(job.workStartHour)}–${formatTime(job.workEndHourFull)}`;
+  const part =
+    job.workEndHourPart != null
+      ? `Mon–Fri ${formatTime(job.workStartHour)}–${formatTime(job.workEndHourPart)}`
+      : full;
+
+  const schedule = job.allowsPartTime
+    ? `Full 40hr: ${full} · Part 20hr: ${part}`
+    : `Full 40hr: ${full}`;
+
+  return {
+    line1: `$${formatMoney(perDay)}/day · $${formatMoney(perHour)}/hr`,
+    line2: `$${formatMoney(perWeek)}/week · $${formatMoney(perSeason)}/season`,
+    schedule,
+  };
+}
+
 type EducationLevel = 'none' | 'in-progress' | 'completed';
 
 interface JobCenterProps {
@@ -381,23 +415,26 @@ export function JobCenter({
                   const degreeLabel = job.requiredDegree
                     ? `${job.requiredDegree.charAt(0).toUpperCase()}${job.requiredDegree.slice(1)}`
                     : null;
+                  const tip = formatJobTooltip(job, getSalaryPerDay, getSalaryPerHour, getEffectiveSalary);
                   return (
-                    <motion.div
-                      key={job.id}
-                      whileHover={available ? { scale: 1.02 } : {}}
-                      whileTap={available ? { scale: 0.98 } : {}}
-                      className={`border-2 p-3 rounded-lg transition-all ${
-                        available
-                          ? 'border-gray-200 hover:border-purple-400 hover:shadow-xl cursor-pointer bg-white'
-                          : 'border-gray-200 bg-gray-100 opacity-70 cursor-not-allowed'
-                      }`}
-                      onClick={() => {
-                        if (available) {
-                          setSelectedJob(job);
-                          setPendingSchedule(job.allowsPartTime ? 'part-time' : 'full-time');
-                        }
-                      }}
-                    >
+                    <Tooltip delayDuration={150}>
+                      <TooltipTrigger asChild>
+                        <motion.div
+                          key={job.id}
+                          whileHover={available ? { scale: 1.02 } : {}}
+                          whileTap={available ? { scale: 0.98 } : {}}
+                          className={`border-2 p-3 rounded-lg transition-all ${
+                            available
+                              ? 'border-gray-200 hover:border-purple-400 hover:shadow-xl cursor-pointer bg-white'
+                              : 'border-gray-200 bg-gray-100 opacity-70 cursor-not-allowed'
+                          }`}
+                          onClick={() => {
+                            if (available) {
+                              setSelectedJob(job);
+                              setPendingSchedule(job.allowsPartTime ? 'part-time' : 'full-time');
+                            }
+                          }}
+                        >
                       <div className="flex items-start gap-2 mb-2">
                         <div className="bg-gradient-to-br from-blue-400 to-blue-600 p-2 rounded-lg">
                           <Briefcase className="size-5 text-white" />
@@ -408,21 +445,27 @@ export function JobCenter({
                           <p className="text-xs text-gray-600 line-clamp-2">{job.description}</p>
                         </div>
                       </div>
-                      <div className="bg-green-50 p-2 rounded-lg mb-1.5">
-                        <div className="text-sm font-bold text-green-700">
-                          ${formatMoney(getSalaryPerDay(job))}/day · ${formatMoney(getSalaryPerHour(job))}/hr
-                        </div>
-                        <div className="text-xs text-green-600 mt-0.5">
-                          ${formatMoney(getSalaryPerDay(job) * 7)}/week · ${formatMoney(getEffectiveSalary(job))}/season
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mb-1.5">{getScheduleText(job)}</p>
                       {!available && degreeLabel && (
                         <p className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
                           Requires {degreeLabel} degree
                         </p>
                       )}
-                    </motion.div>
+                        </motion.div>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        className={
+                          'max-w-sm text-left !rounded-md ' +
+                          '!bg-[#eef2f8] !text-slate-900 shadow-[4px_4px_0_0_rgba(15,23,42,0.22)] ' +
+                          '!border-[3px] !border-[#1a2332] px-3 py-2.5 ' +
+                          '[&>svg]:fill-[#eef2f8] [&>svg]:stroke-[#1a2332]'
+                        }
+                      >
+                        <div className="text-[11px] text-slate-900 font-semibold">{tip.line1}</div>
+                        <div className="text-[11px] text-slate-900 font-semibold">{tip.line2}</div>
+                        <div className="text-[11px] text-slate-700 mt-1">{tip.schedule}</div>
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>

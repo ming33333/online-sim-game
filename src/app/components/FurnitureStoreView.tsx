@@ -48,7 +48,7 @@ export function FurnitureStoreView({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 px-3 sm:px-4 pb-4 pt-2">
-        {(['bed', 'fridge', 'stove', 'decoration'] as const).map((cat) => (
+        {(['bed', 'fridge', 'stove', 'desk', 'decoration'] as const).map((cat) => (
           <div key={cat}>
             <div className="text-[10px] font-bold text-gray-500 uppercase mb-2">{cat}</div>
             <div className="space-y-2">
@@ -59,6 +59,7 @@ export function FurnitureStoreView({
                     (item.category === 'bed' && homeFurniture.bedId === item.id) ||
                     (item.category === 'fridge' && homeFurniture.fridgeId === item.id) ||
                     (item.category === 'stove' && homeFurniture.stoveId === item.id) ||
+                    (item.category === 'desk' && homeFurniture.deskId === item.id) ||
                     (item.category === 'tv' && homeFurniture.tvId === item.id) ||
                     (item.category === 'decoration' && homeFurniture.decorationIds.includes(item.id));
                   const canBuy = currentMoney >= item.cost && !owned;
