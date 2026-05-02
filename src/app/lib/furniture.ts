@@ -11,6 +11,8 @@ export interface FurnitureItem {
   cost: number;
   category: FurnitureCategory;
   icon: string;
+  /** Pixel sprite for the home apartment scene (bed, fridge, etc.). */
+  apartmentSpriteSrc?: string;
   /** Extra energy per hour of sleep (bed) */
   sleepEnergyPerHour?: number;
   /** Extra hunger when eating a home meal (stove) */
@@ -35,6 +37,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 180,
     category: 'bed',
     icon: '🛏️',
+    apartmentSpriteSrc: '/assets/furniture/futon.png',
     sleepEnergyPerHour: -2,
   },
   {
@@ -44,6 +47,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 650,
     category: 'bed',
     icon: '🛌',
+    apartmentSpriteSrc: '/assets/furniture/simple_bed.png',
     sleepEnergyPerHour: 0,
   },
   {
@@ -53,6 +57,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 1800,
     category: 'bed',
     icon: '🛌',
+    apartmentSpriteSrc: '/assets/furniture/luxury_bed.png',
     sleepEnergyPerHour: 5,
   },
   {
@@ -62,6 +67,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 220,
     category: 'fridge',
     icon: '🧊',
+    apartmentSpriteSrc: '/assets/furniture/simple_fridge.png',
     fridgeCapacity: 5,
     dailyHappinessPenalty: 0.5,
     dailyHungerPenalty: 0.25,
@@ -73,6 +79,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 480,
     category: 'fridge',
     icon: '🧃',
+    apartmentSpriteSrc: '/assets/furniture/simple_fridge.png',
     fridgeCapacity: 8,
   },
   {
@@ -82,6 +89,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 1200,
     category: 'fridge',
     icon: '❄️',
+    apartmentSpriteSrc: '/assets/furniture/luxury_fridge.png',
     fridgeCapacity: 10,
     dailyHappinessBonus: 0.35,
   },
@@ -92,6 +100,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 95,
     category: 'stove',
     icon: '🔥',
+    apartmentSpriteSrc: '/assets/furniture/stove_hotplate.png',
     eatHungerBonus: 3,
   },
   {
@@ -101,6 +110,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 520,
     category: 'stove',
     icon: '🍳',
+    apartmentSpriteSrc: '/assets/furniture/stove_gas.png',
     eatHungerBonus: 8,
   },
   {
@@ -110,6 +120,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 160,
     category: 'desk',
     icon: '🪑',
+    apartmentSpriteSrc: '/assets/furniture/desk.png',
   },
   {
     id: 'decor-plant',
@@ -118,15 +129,17 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 45,
     category: 'decoration',
     icon: '🪴',
+    apartmentSpriteSrc: '/assets/furniture/plant.png',
     chillHappinessPerHour: 1,
   },
   {
     id: 'decor-lights',
-    name: 'String lights',
-    description: 'Cozy vibes when you unwind.',
+    name: 'Lamp',
+    description: 'Soft light for reading and unwinding.',
     cost: 35,
     category: 'decoration',
-    icon: '✨',
+    icon: '💡',
+    apartmentSpriteSrc: '/assets/furniture/lamp.png',
     chillHappinessPerHour: 0.75,
   },
   {
@@ -136,6 +149,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 120,
     category: 'decoration',
     icon: '🖼️',
+    apartmentSpriteSrc: '/assets/furniture/art.png',
     chillHappinessPerHour: 2,
   },
   {
@@ -145,6 +159,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 85,
     category: 'tv',
     icon: '📺',
+    apartmentSpriteSrc: '/assets/furniture/old_tv.png',
     watchHappinessPerHour: 1,
   },
   {
@@ -154,6 +169,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 320,
     category: 'tv',
     icon: '📺',
+    apartmentSpriteSrc: '/assets/furniture/simple_tv.png',
     watchHappinessPerHour: 4,
   },
   {
@@ -163,6 +179,7 @@ export const FURNITURE_ITEMS: FurnitureItem[] = [
     cost: 1400,
     category: 'tv',
     icon: '🖥️',
+    apartmentSpriteSrc: '/assets/furniture/flat_screen_tv.png',
     watchHappinessPerHour: 10,
   },
 ];
@@ -204,6 +221,53 @@ export function getSleepEnergyBonusPerHour(f: HomeFurnitureState): number {
   // No bed is intentionally harsh.
   if (!bed) return -5;
   return bed.sleepEnergyPerHour ?? 0;
+}
+
+/** Sprite shown over the apartment background for the bed you own. */
+export function getBedApartmentSpriteSrc(bedId: string | null): string | null {
+  if (!bedId) return null;
+  const item = FURNITURE_BY_ID[bedId];
+  if (item?.category !== 'bed') return null;
+  return item.apartmentSpriteSrc ?? '/assets/furniture/simple_bed.png';
+}
+
+/** Sprite shown over the apartment background for the fridge you own. */
+export function getFridgeApartmentSpriteSrc(fridgeId: string | null): string | null {
+  if (!fridgeId) return null;
+  const item = FURNITURE_BY_ID[fridgeId];
+  if (item?.category !== 'fridge') return null;
+  return item.apartmentSpriteSrc ?? '/assets/furniture/simple_fridge.png';
+}
+
+/** Sprite shown over the apartment background for the TV you own. */
+export function getTvApartmentSpriteSrc(tvId: string | null): string | null {
+  if (!tvId) return null;
+  const item = FURNITURE_BY_ID[tvId];
+  if (item?.category !== 'tv') return null;
+  return item.apartmentSpriteSrc ?? '/assets/furniture/simple_tv.png';
+}
+
+/** Sprite for a decoration placed in the apartment scene (if defined on the item). */
+export function getDecorationApartmentSpriteSrc(decorationId: string | null): string | null {
+  if (!decorationId) return null;
+  const item = FURNITURE_BY_ID[decorationId];
+  if (item?.category !== 'decoration') return null;
+  return item.apartmentSpriteSrc ?? null;
+}
+
+export function getDeskApartmentSpriteSrc(deskId: string | null): string | null {
+  if (!deskId) return null;
+  const item = FURNITURE_BY_ID[deskId];
+  if (item?.category !== 'desk') return null;
+  return item.apartmentSpriteSrc ?? '/assets/furniture/desk.png';
+}
+
+/** Sprite over the apartment background for the stove you own (kitchen counter). */
+export function getStoveApartmentSpriteSrc(stoveId: string | null): string | null {
+  if (!stoveId) return null;
+  const item = FURNITURE_BY_ID[stoveId];
+  if (item?.category !== 'stove') return null;
+  return item.apartmentSpriteSrc ?? '/assets/furniture/stove_hotplate.png';
 }
 
 export function getEatHungerBonus(f: HomeFurnitureState): number {

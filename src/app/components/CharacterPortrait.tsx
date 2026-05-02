@@ -79,7 +79,7 @@ export function CharacterPortrait({
       <div
         className={`relative rounded-2xl overflow-hidden flex items-center justify-center w-full ${
           resolved ? BG[resolved] : 'bg-gradient-to-b from-gray-100 to-gray-200 ring-2 ring-dashed ring-gray-300'
-        } ${isIntro ? 'min-h-[336px] max-h-[432px] py-4' : 'min-h-[360px] max-h-[480px] py-4'}`}
+        } ${isIntro ? 'min-h-[336px] max-h-[432px] py-4' : 'min-h-[300px] max-h-[380px] py-2'}`}
       >
         {src ? (
           <img

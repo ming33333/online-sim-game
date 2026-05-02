@@ -17,6 +17,7 @@ import {
 } from '../components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { TrendingUp, DollarSign, Package, Activity, Download } from 'lucide-react';
+import { FurnitureAnalysisPreview } from '../components/FurnitureAnalysisPreview';
 import { runSimulation, buildLogContent, parseLogContent } from '../../simulator';
 import type { SimRunResult } from '../../simulator';
 import type { CharacterPresetId } from '../../simulator';
@@ -367,6 +368,8 @@ export function AnalysisDashboard() {
             )}
           </CardContent>
         </Card>
+
+        <FurnitureAnalysisPreview />
 
         {runs.length > 0 && (
           <>

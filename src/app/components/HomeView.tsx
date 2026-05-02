@@ -7,6 +7,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
   FURNITURE_BY_ID,
   type HomeFurnitureState,
+  getBedApartmentSpriteSrc,
+  getFridgeApartmentSpriteSrc,
+  getTvApartmentSpriteSrc,
+  getDecorationApartmentSpriteSrc,
+  getDeskApartmentSpriteSrc,
+  getStoveApartmentSpriteSrc,
   getSleepEnergyBonusPerHour,
   getChillHappinessPerHour,
   getEatHungerBonus,
@@ -16,6 +22,7 @@ import { clampFreshnessPct } from '../lib/groceries';
 import { EAT_SNACK_HOURS } from '../../game/constants';
 import { gameChromePanel, gameChromePhaseCardHeader } from '../lib/gameChrome';
 import { relationshipStageLabel, type NpcId } from '../lib/relationships';
+import { DECORATION_APARTMENT_LAYOUT, STOVE_APARTMENT_SCENE_CLASS } from '../lib/apartmentSceneLayout';
 
 interface HomeViewProps {
   apartmentName: string;
@@ -182,24 +189,80 @@ export function HomeView({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4 px-3 sm:px-4 pb-4 pt-2">
+        <CardContent className="space-y-4 px-3 sm:px-4 pb-4 pt-0">
           {!isHomeless && (
             <div
-              className="relative w-[calc(100%+1.5rem)] max-w-none min-w-0 -mx-3 shrink-0 overflow-hidden rounded-none border-[3px] border-[#1a2332] shadow-[3px_3px_0_0_rgba(15,23,42,0.25)] sm:w-[calc(100%+2rem)] sm:-mx-4"
+              className="relative -mt-px aspect-[4/5] max-h-[min(56svh,520px)] min-h-[240px] w-[calc(100%+1.5rem)] max-w-none min-w-0 -mx-3 shrink-0 overflow-hidden rounded-none border-[3px] border-[#1a2332] bg-[#0a0f14] shadow-[3px_3px_0_0_rgba(15,23,42,0.25)] sm:w-[calc(100%+2rem)] sm:-mx-4"
             >
               <img
                 src="/assets/buildings/apartment.png"
                 alt=""
-                className="block h-auto w-full min-w-0 select-none [image-rendering:pixelated] [clip-path:inset(11%_5.5%_9%_5.5%)]"
+                className="absolute inset-0 z-0 size-full object-cover object-center select-none [image-rendering:pixelated]"
                 width={216}
                 height={216}
                 decoding="async"
               />
+              {homeFurniture.decorationIds.map((decId) => {
+                const src = getDecorationApartmentSpriteSrc(decId);
+                const layoutClass = DECORATION_APARTMENT_LAYOUT[decId];
+                if (!src || !layoutClass) return null;
+                return (
+                  <img
+                    key={decId}
+                    src={src}
+                    alt=""
+                    className={layoutClass}
+                    width={80}
+                    height={80}
+                    decoding="async"
+                  />
+                );
+              })}
+              {homeFurniture.fridgeId && (
+                <img
+                  src={getFridgeApartmentSpriteSrc(homeFurniture.fridgeId) ?? '/assets/furniture/simple_fridge.png'}
+                  alt=""
+                  className="pointer-events-none absolute bottom-[-14%] right-[-45%] z-[9] w-[78%] max-h-[52%] h-auto origin-bottom-right scale-[1.5] object-contain object-bottom select-none [image-rendering:pixelated]"
+                  width={240}
+                  height={360}
+                  decoding="async"
+                />
+              )}
+              {homeFurniture.stoveId && (
+                <img
+                  src={getStoveApartmentSpriteSrc(homeFurniture.stoveId) ?? '/assets/furniture/stove_hotplate.png'}
+                  alt=""
+                  className={STOVE_APARTMENT_SCENE_CLASS}
+                  width={120}
+                  height={80}
+                  decoding="async"
+                />
+              )}
+              {homeFurniture.tvId && (
+                <img
+                  src={getTvApartmentSpriteSrc(homeFurniture.tvId) ?? '/assets/furniture/simple_tv.png'}
+                  alt=""
+                  className="pointer-events-none absolute bottom-[5%] left-[10%] z-[18] w-[30%] max-h-[26%] h-auto origin-bottom scale-[1] object-contain object-bottom select-none [image-rendering:pixelated]"
+                  width={100}
+                  height={80}
+                  decoding="async"
+                />
+              )}
+              {homeFurniture.deskId && (
+                <img
+                  src={getDeskApartmentSpriteSrc(homeFurniture.deskId) ?? '/assets/furniture/desk.png'}
+                  alt=""
+                  className="pointer-events-none absolute bottom-[11%] left-[30%] z-[8] w-[38%] max-h-[24%] h-auto origin-bottom scale-[1.5] object-contain object-bottom select-none [image-rendering:pixelated]"
+                  width={140}
+                  height={90}
+                  decoding="async"
+                />
+              )}
               {homeFurniture.bedId && (
                 <img
-                  src="/assets/furniture/simple_bed.png"
+                  src={getBedApartmentSpriteSrc(homeFurniture.bedId) ?? '/assets/furniture/simple_bed.png'}
                   alt=""
-                  className="pointer-events-none absolute bottom-[12%] left-[8%] z-10 w-[46%] max-h-[38%] h-auto object-contain object-bottom select-none [image-rendering:pixelated]"
+                  className="pointer-events-none absolute bottom-[5%] left-[-8%] z-10 w-[46%] max-h-[36%] h-auto origin-bottom-left scale-[1.5] object-contain object-bottom select-none [image-rendering:pixelated]"
                   width={120}
                   height={80}
                   decoding="async"
@@ -256,7 +319,18 @@ export function HomeView({
                   className="flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-white shadow-sm border text-[10px] text-center p-1"
                   title={FURNITURE_BY_ID[homeFurniture.fridgeId]?.name}
                 >
-                  <span className="text-xl leading-none">{FURNITURE_BY_ID[homeFurniture.fridgeId]?.icon ?? '🧊'}</span>
+                  {FURNITURE_BY_ID[homeFurniture.fridgeId]?.apartmentSpriteSrc ? (
+                    <img
+                      src={FURNITURE_BY_ID[homeFurniture.fridgeId]!.apartmentSpriteSrc}
+                      alt=""
+                      width={36}
+                      height={36}
+                      className="size-9 object-contain [image-rendering:pixelated]"
+                      decoding="async"
+                    />
+                  ) : (
+                    <span className="text-xl leading-none">{FURNITURE_BY_ID[homeFurniture.fridgeId]?.icon ?? '🧊'}</span>
+                  )}
                   <span className="truncate w-full mt-0.5">Fridge</span>
                 </div>
               )}
@@ -265,7 +339,17 @@ export function HomeView({
                   className="flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-white shadow-sm border text-[10px] text-center p-1"
                   title={FURNITURE_BY_ID[homeFurniture.tvId]?.name}
                 >
-                  <span className="text-xl leading-none">{FURNITURE_BY_ID[homeFurniture.tvId]?.icon ?? '📺'}</span>
+                  <img
+                    src={
+                      FURNITURE_BY_ID[homeFurniture.tvId]?.apartmentSpriteSrc ??
+                      '/assets/furniture/simple_tv.png'
+                    }
+                    alt=""
+                    width={36}
+                    height={36}
+                    className="size-9 object-contain [image-rendering:pixelated]"
+                    decoding="async"
+                  />
                   <span className="truncate w-full mt-0.5">TV</span>
                 </div>
               )}
@@ -274,20 +358,61 @@ export function HomeView({
                   className="flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-white shadow-sm border text-[10px] text-center p-1"
                   title={FURNITURE_BY_ID[homeFurniture.stoveId]?.name}
                 >
-                  <span className="text-xl leading-none">{FURNITURE_BY_ID[homeFurniture.stoveId]?.icon ?? '🔥'}</span>
+                  <img
+                    src={
+                      getStoveApartmentSpriteSrc(homeFurniture.stoveId) ??
+                      '/assets/furniture/stove_hotplate.png'
+                    }
+                    alt=""
+                    width={36}
+                    height={36}
+                    className="size-9 object-contain [image-rendering:pixelated]"
+                    decoding="async"
+                  />
                   <span className="truncate w-full mt-0.5">Stove</span>
+                </div>
+              )}
+              {homeFurniture.deskId && (
+                <div
+                  className="flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-white shadow-sm border text-[10px] text-center p-1"
+                  title={FURNITURE_BY_ID[homeFurniture.deskId]?.name}
+                >
+                  <img
+                    src={
+                      FURNITURE_BY_ID[homeFurniture.deskId]?.apartmentSpriteSrc ??
+                      '/assets/furniture/desk.png'
+                    }
+                    alt=""
+                    width={36}
+                    height={36}
+                    className="size-9 object-contain [image-rendering:pixelated]"
+                    decoding="async"
+                  />
+                  <span className="truncate w-full mt-0.5">Desk</span>
                 </div>
               )}
               {homeFurniture.decorationIds.map((id) => {
                 const d = FURNITURE_BY_ID[id];
                 if (!d) return null;
+                const sprite = getDecorationApartmentSpriteSrc(id);
                 return (
                   <div
                     key={id}
                     className="flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-white shadow-sm border text-[10px] text-center p-1"
                     title={d.name}
                   >
-                    <span className="text-xl leading-none">{d.icon}</span>
+                    {sprite ? (
+                      <img
+                        src={sprite}
+                        alt=""
+                        width={36}
+                        height={36}
+                        className="size-9 object-contain [image-rendering:pixelated]"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span className="text-xl leading-none">{d.icon}</span>
+                    )}
                     <span className="truncate w-full mt-0.5">Decor</span>
                   </div>
                 );
@@ -295,6 +420,8 @@ export function HomeView({
               {!homeFurniture.bedId &&
                 !homeFurniture.fridgeId &&
                 !homeFurniture.stoveId &&
+                !homeFurniture.tvId &&
+                !homeFurniture.deskId &&
                 homeFurniture.decorationIds.length === 0 && (
                   <p className="text-[11px] text-stone-500 italic px-1">
                     Empty nest — visit the furniture store on the map to furnish your home.

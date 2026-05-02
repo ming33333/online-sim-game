@@ -69,7 +69,18 @@ export function FurnitureStoreView({
                       whileTap={{ scale: 0.99 }}
                       className="flex gap-2 items-start p-3 rounded-none border border-slate-500/50 bg-[#f4f7fc] text-xs"
                     >
-                      <span className="text-2xl shrink-0">{item.icon}</span>
+                      {item.apartmentSpriteSrc ? (
+                        <img
+                          src={item.apartmentSpriteSrc}
+                          alt=""
+                          width={40}
+                          height={40}
+                          className="size-10 shrink-0 object-contain [image-rendering:pixelated] border border-slate-400/60 bg-white/80"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span className="text-2xl shrink-0">{item.icon}</span>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold">{item.name}</div>
                         <div className="text-[11px] text-gray-600">{item.description}</div>

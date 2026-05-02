@@ -5139,9 +5139,9 @@ export function LifeSimGame() {
       </Dialog>
       <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-h-0 gap-2">
         {/* Main Content: Map and Event Log — flex-1 shrinks so bottom hub never overlaps */}
-        <div className="grid md:grid-cols-3 gap-2 flex-1 min-h-0 min-w-0 overflow-hidden">
-          {/* Map - Takes 2/3 of the space */}
-          <div className="md:col-span-2 min-h-0 min-w-0 flex flex-col flex-1 overflow-hidden">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_352px] gap-2 flex-1 min-h-0 min-w-0 overflow-hidden">
+          {/* Map - Main column */}
+          <div className="min-h-0 min-w-0 flex flex-col flex-1 overflow-hidden">
             <InteractiveMap
               stats={stats}
               onActivityComplete={handleMapActivity}
@@ -5296,7 +5296,7 @@ export function LifeSimGame() {
           </div>
 
           {/* Character view - right column; latest log at bottom, full log in dialog (dev cheats portaled under App “Show Game/Analysis”) */}
-          <div className="md:col-span-1 min-h-0 min-w-0 flex flex-col gap-2 flex-1 overflow-hidden">
+          <div className="min-h-0 min-w-0 flex flex-col gap-2 flex-1 overflow-hidden">
             <Card className={`${gameChromePanelMuted} flex flex-col flex-1 min-h-0`}>
               <CardHeader className={`flex-shrink-0 py-2 pb-1 px-3 ${gameChromePanelHeader}`}>
                 <button
@@ -5310,8 +5310,8 @@ export function LifeSimGame() {
                   </span>
                 </button>
               </CardHeader>
-              <CardContent className="flex-1 min-h-0 flex flex-col pt-0 pb-0 px-2">
-                <div className="flex-1 min-h-0 flex items-stretch justify-center py-1 pb-2">
+              <CardContent className="flex-1 min-h-0 flex flex-col pt-0 pb-0 px-1">
+                <div className="flex-1 min-h-0 flex items-stretch justify-center py-1 pb-1">
                   <CharacterPortrait
                     variant="panel"
                     presetId={selectedCharacter?.id ?? null}
