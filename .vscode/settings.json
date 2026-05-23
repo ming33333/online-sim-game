@@ -1,3 +1,4 @@
 {
-    "dart.mcpServerLogFile": null
+    "dart.mcpServerLogFile": null,
+    "git.path": "/opt/homebrew/bin/git"
 }

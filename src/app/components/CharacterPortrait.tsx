@@ -79,7 +79,7 @@ export function CharacterPortrait({
       <div
         className={`relative rounded-2xl overflow-hidden flex items-center justify-center w-full ${
           resolved ? BG[resolved] : 'bg-gradient-to-b from-gray-100 to-gray-200 ring-2 ring-dashed ring-gray-300'
-        } ${isIntro ? 'min-h-[336px] max-h-[432px] py-4' : 'min-h-[300px] max-h-[380px] py-2'}`}
+        } ${isIntro ? 'min-h-[336px] max-h-[432px] py-4' : 'min-h-[100px] max-h-[40px] py-1'}`}
       >
         {src ? (
           <img
@@ -90,7 +90,7 @@ export function CharacterPortrait({
             className={`w-full select-none object-contain object-center [image-rendering:pixelated] ${
               isIntro
                 ? 'max-h-[408px] rounded-xl shadow-sm'
-                : 'max-h-[440px] w-auto scale-[1.55] md:scale-[1.75] rounded-lg shadow-sm'
+                : 'max-h-[120px] w-auto scale-100 rounded-lg shadow-sm'
             }`}
           />
         ) : (

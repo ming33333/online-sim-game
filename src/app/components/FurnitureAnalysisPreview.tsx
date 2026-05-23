@@ -3,7 +3,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 import { LayoutGrid } from 'lucide-react';
-import { DECORATION_APARTMENT_LAYOUT, STOVE_APARTMENT_SCENE_CLASS } from '../lib/apartmentSceneLayout';
+import {
+  APARTMENT_SCENE_BG_IMAGE_CLASS,
+  APARTMENT_SCENE_HEIGHT,
+  APARTMENT_SCENE_OUTER_CLASS,
+  APARTMENT_SCENE_SLOT_CLASS,
+  APARTMENT_SCENE_WIDTH,
+  DECORATION_APARTMENT_LAYOUT,
+  STOVE_APARTMENT_SCENE_CLASS,
+} from '../lib/apartmentSceneLayout';
 import {
   getBedApartmentSpriteSrc,
   getFridgeApartmentSpriteSrc,
@@ -86,15 +94,14 @@ export function FurnitureAnalysisPreview() {
           ))}
         </div>
 
-        <div
-          className="relative aspect-[4/5] max-h-[min(56svh,520px)] min-h-[240px] w-full max-w-md mx-auto overflow-hidden rounded-lg border-[3px] border-[#1a2332] bg-[#0a0f14] shadow-[3px_3px_0_0_rgba(15,23,42,0.25)]"
-        >
+        <div className={`${APARTMENT_SCENE_OUTER_CLASS} max-w-2xl mx-auto min-h-[280px]`}>
+          <div className={`${APARTMENT_SCENE_SLOT_CLASS} rounded-lg min-h-[280px]`}>
           <img
             src="/assets/buildings/apartment.png"
             alt=""
-            className="absolute inset-0 z-0 size-full object-cover object-center select-none [image-rendering:pixelated]"
-            width={216}
-            height={216}
+            className={APARTMENT_SCENE_BG_IMAGE_CLASS}
+            width={APARTMENT_SCENE_WIDTH}
+            height={APARTMENT_SCENE_HEIGHT}
             decoding="async"
           />
           {decorIds.map((decId) => {
@@ -163,6 +170,7 @@ export function FurnitureAnalysisPreview() {
               decoding="async"
             />
           )}
+          </div>
         </div>
       </CardContent>
     </Card>

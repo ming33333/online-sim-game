@@ -22,7 +22,15 @@ import { clampFreshnessPct } from '../lib/groceries';
 import { EAT_SNACK_HOURS } from '../../game/constants';
 import { gameChromePanel, gameChromePhaseCardHeader } from '../lib/gameChrome';
 import { relationshipStageLabel, type NpcId } from '../lib/relationships';
-import { DECORATION_APARTMENT_LAYOUT, STOVE_APARTMENT_SCENE_CLASS } from '../lib/apartmentSceneLayout';
+import {
+  APARTMENT_SCENE_BG_IMAGE_CLASS,
+  APARTMENT_SCENE_HEIGHT,
+  APARTMENT_SCENE_OUTER_CLASS,
+  APARTMENT_SCENE_SLOT_CLASS,
+  APARTMENT_SCENE_WIDTH,
+  DECORATION_APARTMENT_LAYOUT,
+  STOVE_APARTMENT_SCENE_CLASS,
+} from '../lib/apartmentSceneLayout';
 
 interface HomeViewProps {
   apartmentName: string;
@@ -64,6 +72,9 @@ interface HomeViewProps {
 }
 
 const BASE_ENERGY_PER_HOUR = 10;
+
+/** Set true to show neighbor, sleep, eat, chill, TV, and other home actions. */
+export const HOME_ACTIVITIES_ENABLED = false;
 
 export function HomeView({
   apartmentName,
@@ -130,10 +141,10 @@ export function HomeView({
   const canStashLux = canStashPacked && togoHome.lux > 0;
 
   return (
-    <div className="w-full min-h-full flex flex-col gap-3">
-      <Card className={`${gameChromePanel} w-full flex flex-col`}>
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <Card className={`${gameChromePanel} flex min-h-0 w-full flex-1 flex-col overflow-hidden`}>
         <CardHeader
-          className={`flex items-center justify-between gap-2 flex-shrink-0 py-2 px-3 ${gameChromePhaseCardHeader}`}
+          className={`flex shrink-0 items-center justify-between gap-2 py-1.5 px-3 ${gameChromePhaseCardHeader}`}
         >
           <div className="min-w-0">
             <CardTitle className="text-base flex items-center gap-2 text-slate-900">
@@ -189,17 +200,16 @@ export function HomeView({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4 px-3 sm:px-4 pb-4 pt-0">
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-2 pt-0 sm:px-3">
           {!isHomeless && (
-            <div
-              className="relative -mt-px aspect-[4/5] max-h-[min(56svh,520px)] min-h-[240px] w-[calc(100%+1.5rem)] max-w-none min-w-0 -mx-3 shrink-0 overflow-hidden rounded-none border-[3px] border-[#1a2332] bg-[#0a0f14] shadow-[3px_3px_0_0_rgba(15,23,42,0.25)] sm:w-[calc(100%+2rem)] sm:-mx-4"
-            >
+            <div className={APARTMENT_SCENE_OUTER_CLASS}>
+              <div className={APARTMENT_SCENE_SLOT_CLASS}>
               <img
                 src="/assets/buildings/apartment.png"
                 alt=""
-                className="absolute inset-0 z-0 size-full object-cover object-center select-none [image-rendering:pixelated]"
-                width={216}
-                height={216}
+                className={APARTMENT_SCENE_BG_IMAGE_CLASS}
+                width={APARTMENT_SCENE_WIDTH}
+                height={APARTMENT_SCENE_HEIGHT}
                 decoding="async"
               />
               {homeFurniture.decorationIds.map((decId) => {
@@ -268,8 +278,11 @@ export function HomeView({
                   decoding="async"
                 />
               )}
+              </div>
             </div>
           )}
+          {HOME_ACTIVITIES_ENABLED && (
+          <>
           {!isHomeless && (
             <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-3 space-y-2">
               <p className="text-xs font-semibold text-gray-900">Neighbor</p>
@@ -704,6 +717,8 @@ export function HomeView({
                 </div>
               </div>
             </div>
+          )}
+          </>
           )}
         </CardContent>
       </Card>

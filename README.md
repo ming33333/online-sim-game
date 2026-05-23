@@ -16,5 +16,6 @@
 2. more home objects  
 3. bank stuff, like CDs and index funds
 
-4. some aesthetics  
-5. verify game mechanics are challenging and fun
+1. some aesthetics (reorg game UI)
+2. verify game mechanics are challenging and fun
+

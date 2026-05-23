@@ -4624,7 +4624,7 @@ export function LifeSimGame() {
           devCheatsPortalTarget
         ) as unknown as React.ReactNode)
         : null}
-      <div className="relative z-10 flex flex-col flex-1 min-h-0 overflow-hidden p-2">
+      <div className="relative z-10 flex flex-col flex-1 min-h-0 overflow-hidden px-1 py-0.5 sm:px-1.5">
       <Dialog open={showAlreadyPaidRentDialog} onOpenChange={(open) => !open && (setShowAlreadyPaidRentDialog(false), setPendingMoveApartment(null))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -5137,11 +5137,10 @@ export function LifeSimGame() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-h-0 gap-2">
-        {/* Main Content: Map and Event Log — flex-1 shrinks so bottom hub never overlaps */}
-        <div className="grid md:grid-cols-[minmax(0,1fr)_352px] gap-2 flex-1 min-h-0 min-w-0 overflow-hidden">
-          {/* Map - Main column */}
-          <div className="min-h-0 min-w-0 flex flex-col flex-1 overflow-hidden">
+      <div className="mx-auto w-full max-w-[min(100%,100rem)] flex-1 flex flex-col min-h-0 gap-1">
+        {/* Full-width map; bottom strip = character + stats hub */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <InteractiveMap
               stats={stats}
               onActivityComplete={handleMapActivity}
@@ -5295,31 +5294,32 @@ export function LifeSimGame() {
             />
           </div>
 
-          {/* Character view - right column; latest log at bottom, full log in dialog (dev cheats portaled under App “Show Game/Analysis”) */}
-          <div className="min-h-0 min-w-0 flex flex-col gap-2 flex-1 overflow-hidden">
-            <Card className={`${gameChromePanelMuted} flex flex-col flex-1 min-h-0`}>
-              <CardHeader className={`flex-shrink-0 py-2 pb-1 px-3 ${gameChromePanelHeader}`}>
+          <div className="flex min-h-0 shrink-0 flex-col gap-0.5 border-t border-slate-400/35 pt-0.5 xl:flex-row xl:items-stretch xl:gap-1.5 xl:overflow-hidden xl:max-h-[9.5rem]">
+          {/* Character + latest log; full log in dialog */}
+          <div className="flex min-h-0 min-w-0 max-h-[min(34vh,260px)] flex-col gap-0.5 overflow-x-hidden overflow-y-auto xl:max-h-none xl:w-40 xl:max-w-[10rem] xl:shrink-0 xl:overflow-y-visible">
+            <Card className={`${gameChromePanelMuted} flex min-h-0 flex-1 flex-col xl:min-h-0`}>
+              <CardHeader className={`flex-shrink-0 py-0.5 pb-0 px-2 ${gameChromePanelHeader}`}>
                 <button
                   type="button"
                   onClick={() => setPlayerSkillsOpen(true)}
                   className="w-full min-w-0 text-left rounded-md px-1.5 py-0.5 -mx-1.5 -my-0.5 hover:bg-slate-200/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 transition-colors"
                   aria-label="Open player skills"
                 >
-                  <span className="block text-sm font-semibold text-slate-900 truncate">
+                  <span className="block text-xs font-semibold text-slate-900 truncate">
                     {characterDisplayName || 'Sim'}
                   </span>
                 </button>
               </CardHeader>
-              <CardContent className="flex-1 min-h-0 flex flex-col pt-0 pb-0 px-1">
-                <div className="flex-1 min-h-0 flex items-stretch justify-center py-1 pb-1">
+              <CardContent className="flex-1 min-h-0 flex flex-col pt-0 pb-0 px-1 xl:py-0">
+                <div className="flex-none flex items-stretch justify-center py-0.5 xl:hidden">
                   <CharacterPortrait
                     variant="panel"
                     presetId={selectedCharacter?.id ?? null}
                     gender={characterGender}
-                    className="w-full max-w-[200px]"
+                    className="w-full max-w-[120px]"
                   />
                 </div>
-                <div className="flex-shrink-0 border-t border-slate-400/55 bg-slate-100/50 rounded-b-md px-2 py-2 -mx-0.5 mb-0.5">
+                <div className="flex-shrink-0 border-t border-slate-400/55 bg-slate-100/50 rounded-b-md px-1.5 py-1 -mx-0.5 mb-0.5 xl:hidden">
                   <div className="flex items-center gap-1 mb-1">
                     <ScrollText className="size-3 text-sky-700 shrink-0" />
                     <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">
@@ -5327,7 +5327,7 @@ export function LifeSimGame() {
                     </span>
                   </div>
                   {eventLog.length === 0 ? (
-                    <p className="text-[11px] text-slate-500 italic leading-snug">
+                    <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2">
                       No activities yet — open the map and visit a place.
                     </p>
                   ) : (
@@ -5335,11 +5335,11 @@ export function LifeSimGame() {
                       {(() => {
                         const entry = eventLog[0];
                         return (
-                          <div className="border-l-2 border-sky-600 pl-1.5 py-1 bg-sky-100/80 rounded-r">
-                            <div className="text-[9px] font-semibold text-sky-900 mb-0.5">
+                          <div className="border-l-2 border-sky-600 pl-1.5 py-0.5 bg-sky-100/80 rounded-r">
+                            <div className="text-[8px] font-semibold text-sky-900 mb-0.5">
                               {entry.timestamp}
                             </div>
-                            <p className="text-[11px] text-slate-800 leading-snug line-clamp-4">{entry.text}</p>
+                            <p className="text-[10px] text-slate-800 leading-snug line-clamp-2">{entry.text}</p>
                             <div className="flex gap-1 flex-wrap mt-1">
                               {entry.effects.health != null && entry.effects.health !== 0 && (
                                 <span
@@ -6022,23 +6022,21 @@ export function LifeSimGame() {
             </Dialog>
 
           </div>
-        </div>
-        {/* Stats / needs dock — below map & side column */}
         {!playerHubCollapsed && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex-shrink-0 relative z-10 min-h-0 max-h-[min(52vh,560px)] overflow-y-auto overscroll-contain shadow-[0_-6px_16px_rgba(15,23,42,0.12)]"
+          className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden overscroll-contain shadow-[0_-6px_16px_rgba(15,23,42,0.12)] xl:min-h-0 xl:shadow-none"
         >
-          <Card className={gameChromePanel}>
-            <CardContent className="pt-3 pb-3 px-3 sm:px-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:items-stretch">
+          <Card className={`${gameChromePanel} min-h-0 overflow-hidden`}>
+            <CardContent className="py-1 px-2 sm:px-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 md:items-center xl:gap-2">
                 <div className="min-w-0 md:pr-3 md:border-r md:border-slate-400/80">
-                  <div className="flex items-center gap-1 mb-1 -mx-0.5 min-w-0">
+                  <div className="flex items-center gap-1 mb-0.5 -mx-0.5 min-w-0">
                     <button
                       type="button"
                       onClick={() => setCalendarOverlayOpen(true)}
-                      className="flex-1 min-w-0 text-left rounded-md px-2 py-1.5 hover:bg-slate-100/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 transition-colors"
+                      className="flex-1 min-w-0 text-left rounded-md px-1.5 py-1 hover:bg-slate-100/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 transition-colors"
                       aria-label="Open calendar, weather, and schedule details"
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -6082,7 +6080,7 @@ export function LifeSimGame() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 w-8 shrink-0 p-0"
+                      className="h-7 w-7 shrink-0 p-0"
                       onClick={() => setInventoryOpen(true)}
                       title="Inventory"
                       aria-label="Open inventory"
@@ -6093,7 +6091,7 @@ export function LifeSimGame() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 w-8 shrink-0 p-0"
+                      className="h-7 w-7 shrink-0 p-0"
                       onClick={() => setPhoneOpen(true)}
                       title="Phone"
                       aria-label="Open phone"
@@ -6101,11 +6099,11 @@ export function LifeSimGame() {
                       <Smartphone className="size-3.5" />
                     </Button>
                   </div>
-                  <div className="flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md border border-slate-500/50 bg-[#eef2f8]/85">
-                    <Coins className="size-3.5 text-slate-500 shrink-0" />
+                  <div className="flex items-center gap-2 px-2 py-1 mb-0.5 rounded-md border border-slate-500/50 bg-[#eef2f8]/85">
+                    <Coins className="size-3 text-slate-500 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-medium text-slate-600 leading-none mb-0.5">Money</div>
-                      <div className="text-sm font-bold text-slate-900 tabular-nums leading-tight">
+                      <div className="text-[9px] font-medium text-slate-600 leading-none mb-0.5">Money</div>
+                      <div className="text-xs font-bold text-slate-900 tabular-nums leading-tight">
                         ${formatMoney(stats.money)}
                       </div>
                       {selectedApartment && (
@@ -6265,11 +6263,11 @@ export function LifeSimGame() {
                     </DialogContent>
                   </Dialog>
 
-                  <div className="mt-2 rounded-md border border-slate-500/50 bg-[#eef2f8]/85 p-2">
-                    <div className="text-[10px] font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                  <div className="mt-0.5 rounded-md border border-slate-500/50 bg-[#eef2f8]/85 p-1 xl:hidden">
+                    <div className="text-[9px] font-semibold text-slate-700 uppercase tracking-wide mb-0.5">
                       Status
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-800">
+                    <div className="grid grid-cols-3 gap-1 text-[9px] text-slate-800">
                       <div>
                         <div className="font-semibold text-gray-900 text-xs flex items-center gap-1">
                           <Home className="size-3.5 text-emerald-600 shrink-0" />
@@ -6404,11 +6402,10 @@ export function LifeSimGame() {
                   </div>
                 </div>
 
-                <div className="min-w-0 md:pl-3 md:border-l md:border-slate-400/90 flex flex-col gap-2 min-h-0 md:h-full">
-                  <div className="rounded-md border border-slate-500/50 bg-[#eef2f8]/85 p-2.5 flex-1 min-h-0 flex flex-col">
-                    <div className="text-xs font-semibold text-slate-900 mb-2">Basic needs</div>
-                    <p className="text-[9px] text-slate-500 mb-1.5 leading-snug">Hover a stat for the full 0–100 scale.</p>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 flex-1 min-h-0">
+                <div className="min-w-0 md:pl-2 md:border-l md:border-slate-400/90 flex flex-col min-h-0 md:h-full">
+                  <div className="rounded-md border border-slate-500/50 bg-[#eef2f8]/85 p-1 flex min-h-0 flex-col">
+                    <div className="text-[9px] font-semibold text-slate-900 mb-0.5 shrink-0">Basic needs</div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 flex-1 min-h-0 xl:grid-cols-4 xl:gap-x-1.5 xl:gap-y-0.5">
                       <VitalScaleTooltip
                         title="Health"
                         bands={HEALTH_VITAL_BANDS}
@@ -6425,10 +6422,10 @@ export function LifeSimGame() {
                             />
                             <span className="text-[10px] font-medium truncate">Health</span>
                           </div>
-                          <div className="text-[9px] text-gray-500 truncate mb-0.5">{getHealthMood(stats.health)}</div>
+                          <div className="text-[8px] text-gray-500 truncate mb-0.5 xl:hidden">{getHealthMood(stats.health)}</div>
                           <div className="flex items-center gap-0.5">
                             <Progress value={stats.health} className="h-1 flex-1 min-w-0" />
-                            <span className="text-[10px] font-bold shrink-0">{intStat(stats.health)}</span>
+                            <span className="text-[9px] font-bold shrink-0">{intStat(stats.health)}</span>
                           </div>
                         </div>
                       </VitalScaleTooltip>
@@ -6444,10 +6441,10 @@ export function LifeSimGame() {
                             <Smile className="size-3 text-yellow-500 shrink-0" />
                             <span className="text-[10px] font-medium truncate">Happiness</span>
                           </div>
-                          <div className="text-[9px] text-gray-500 truncate mb-0.5">{getHappinessMood(stats.happiness)}</div>
+                          <div className="text-[8px] text-gray-500 truncate mb-0.5 xl:hidden">{getHappinessMood(stats.happiness)}</div>
                           <div className="flex items-center gap-0.5">
                             <Progress value={stats.happiness} className="h-1 flex-1 min-w-0" />
-                            <span className="text-[10px] font-bold shrink-0">{intStat(stats.happiness)}</span>
+                            <span className="text-[9px] font-bold shrink-0">{intStat(stats.happiness)}</span>
                           </div>
                         </div>
                       </VitalScaleTooltip>
@@ -6463,10 +6460,10 @@ export function LifeSimGame() {
                             <Zap className="size-3 text-amber-500 shrink-0" />
                             <span className="text-[10px] font-medium truncate">Energy</span>
                           </div>
-                          <div className="text-[9px] text-gray-500 truncate mb-0.5">{getEnergyMood(stats.energy)}</div>
+                          <div className="text-[8px] text-gray-500 truncate mb-0.5 xl:hidden">{getEnergyMood(stats.energy)}</div>
                           <div className="flex items-center gap-0.5">
                             <Progress value={stats.energy} className="h-1 flex-1 min-w-0" />
-                            <span className="text-[10px] font-bold shrink-0">{intStat(stats.energy)}</span>
+                            <span className="text-[9px] font-bold shrink-0">{intStat(stats.energy)}</span>
                           </div>
                         </div>
                       </VitalScaleTooltip>
@@ -6482,10 +6479,10 @@ export function LifeSimGame() {
                             <UtensilsCrossed className="size-3 text-orange-500 shrink-0" />
                             <span className="text-[10px] font-medium truncate">Hunger</span>
                           </div>
-                          <div className="text-[9px] text-gray-500 truncate mb-0.5">{getHungerMood(stats.hunger)}</div>
+                          <div className="text-[8px] text-gray-500 truncate mb-0.5 xl:hidden">{getHungerMood(stats.hunger)}</div>
                           <div className="flex items-center gap-0.5">
                             <Progress value={stats.hunger} className="h-1 flex-1 min-w-0" />
-                            <span className="text-[10px] font-bold shrink-0">{intStat(stats.hunger)}</span>
+                            <span className="text-[9px] font-bold shrink-0">{intStat(stats.hunger)}</span>
                           </div>
                         </div>
                       </VitalScaleTooltip>
@@ -6497,7 +6494,9 @@ export function LifeSimGame() {
           </Card>
         </motion.div>
         )}
-        <div className="flex items-center justify-end flex-shrink-0 pt-0.5">
+          </div>
+        </div>
+        <div className="flex flex-shrink-0 items-center justify-end pt-0.5">
           <Button
             variant="outline"
             size="sm"

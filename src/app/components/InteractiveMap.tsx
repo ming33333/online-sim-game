@@ -38,10 +38,23 @@ import { DISTRICT_POSITIONS, DISTRICT_NAMES, TRACK_GRAPH } from '../lib/werdredM
 import { WerdredMapTrackLayer } from './WerdredMapTrackLayer';
 
 /** Map column fills above the bottom stats hub; inner area scrolls when a phase UI is tall. */
-function PhaseScrollRoot({ children }: { children: React.ReactNode }) {
+function PhaseScrollRoot({
+  children,
+  fitViewport = false,
+}: {
+  children: React.ReactNode;
+  /** Home: no scroll — apartment scales to the available column height. */
+  fitViewport?: boolean;
+}) {
   return (
     <div className="h-full min-h-0 w-full min-w-0 flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain">
+      <div
+        className={
+          fitViewport
+            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+            : 'flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain'
+        }
+      >
         {children}
       </div>
     </div>
@@ -957,7 +970,7 @@ export function InteractiveMap({
   // Home - Sleep & Eat
   if (!showMapOverlay && gamePhase === 'home') {
     return (
-      <PhaseScrollRoot>
+      <PhaseScrollRoot fitViewport>
       <HomeView
         onOpenMapOverlay={onOpenMapOverlay}
         apartmentName={isHomeless ? 'No housing' : (selectedApartment?.name ?? 'Your Home')}
